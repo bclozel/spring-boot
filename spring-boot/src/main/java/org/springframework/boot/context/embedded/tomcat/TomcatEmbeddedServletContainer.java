@@ -264,7 +264,7 @@ public class TomcatEmbeddedServletContainer implements EmbeddedServletContainer 
 		}
 	}
 
-	Map<Service, Connector[]> getServiceConnectors() {
+	public Map<Service, Connector[]> getServiceConnectors() {
 		return this.serviceConnectors;
 	}
 

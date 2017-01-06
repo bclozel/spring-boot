@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -247,14 +248,18 @@ public class TomcatEmbeddedServletContainerFactoryTests
 		TomcatEmbeddedServletContainerFactory factory = getFactory();
 		factory.setUriEncoding(Charset.forName("US-ASCII"));
 		Tomcat tomcat = getTomcat(factory);
-		assertThat(tomcat.getConnector().getURIEncoding()).isEqualTo("US-ASCII");
+		Connector connector = ((TomcatEmbeddedServletContainer) this.container)
+				.getServiceConnectors().get(tomcat.getService())[0];
+		assertThat(connector.getURIEncoding()).isEqualTo("US-ASCII");
 	}
 
 	@Test
 	public void defaultUriEncoding() throws Exception {
 		TomcatEmbeddedServletContainerFactory factory = getFactory();
 		Tomcat tomcat = getTomcat(factory);
-		assertThat(tomcat.getConnector().getURIEncoding()).isEqualTo("UTF-8");
+		Connector connector = ((TomcatEmbeddedServletContainer) this.container)
+				.getServiceConnectors().get(tomcat.getService())[0];
+		assertThat(connector.getURIEncoding()).isEqualTo("UTF-8");
 	}
 
 	@Test
@@ -263,13 +268,12 @@ public class TomcatEmbeddedServletContainerFactoryTests
 		ssl.setKeyStore("test.jks");
 		ssl.setKeyStorePassword("secret");
 		ssl.setCiphers(new String[] { "ALPHA", "BRAVO", "CHARLIE" });
-
 		TomcatEmbeddedServletContainerFactory factory = getFactory();
 		factory.setSsl(ssl);
 
 		Tomcat tomcat = getTomcat(factory);
-		Connector connector = tomcat.getConnector();
-
+		Connector connector = ((TomcatEmbeddedServletContainer) this.container)
+				.getServiceConnectors().get(tomcat.getService())[0];
 		SSLHostConfig[] sslHostConfigs = connector.getProtocolHandler()
 				.findSslHostConfigs();
 		assertThat(sslHostConfigs[0].getCiphers()).isEqualTo("ALPHA:BRAVO:CHARLIE");
@@ -309,9 +313,8 @@ public class TomcatEmbeddedServletContainerFactoryTests
 		this.container = factory
 				.getEmbeddedServletContainer(sessionServletRegistration());
 		Tomcat tomcat = ((TomcatEmbeddedServletContainer) this.container).getTomcat();
-		Connector connector = tomcat.getConnector();
-
 		this.container.start();
+		Connector connector = tomcat.getConnector();
 		SSLHostConfig sslHostConfig = connector.getProtocolHandler()
 				.findSslHostConfigs()[0];
 		assertThat(sslHostConfig.getSslProtocol()).isEqualTo("TLS");
@@ -358,6 +361,17 @@ public class TomcatEmbeddedServletContainerFactoryTests
 		connector.setPort(port);
 		((TomcatEmbeddedServletContainerFactory) factory)
 				.addAdditionalTomcatConnectors(connector);
+	}
+
+	@Test
+	public void jspServletInitParameters() throws Exception {
+		Map<String, String> initParameters = new HashMap<String, String>();
+		initParameters.put("a", "alpha");
+		TomcatEmbeddedServletContainerFactory factory = getFactory();
+		factory.getJspServlet().setInitParameters(initParameters);
+		this.container = factory.getEmbeddedServletContainer();
+		JspServlet jspServlet = getJspServlet();
+		assertThat(jspServlet.getInitParameter("a")).isEqualTo("alpha");
 	}
 
 	@Test

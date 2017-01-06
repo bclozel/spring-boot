@@ -31,6 +31,7 @@ import javax.servlet.SessionTrackingMode;
 
 import org.apache.catalina.Context;
 import org.apache.catalina.Valve;
+import org.apache.catalina.connector.Connector;
 import org.apache.catalina.valves.AccessLogValve;
 import org.apache.catalina.valves.RemoteIpValve;
 import org.apache.coyote.AbstractProtocol;
@@ -492,7 +493,7 @@ public class ServerPropertiesTests {
 	}
 
 	@Test
-	public void customTomcatAcceptCount() {
+	public void customTomcatAcceptCount() throws Exception {
 		Map<String, String> map = new HashMap<String, String>();
 		map.put("server.tomcat.accept-count", "10");
 		bindProperties(map);
@@ -500,8 +501,9 @@ public class ServerPropertiesTests {
 		this.properties.customize(container);
 		TomcatEmbeddedServletContainer embeddedContainer = (TomcatEmbeddedServletContainer) container
 				.getEmbeddedServletContainer();
-		assertThat(((AbstractProtocol<?>) embeddedContainer.getTomcat().getConnector()
-				.getProtocolHandler()).getBacklog()).isEqualTo(10);
+		Connector connector = embeddedContainer.getServiceConnectors()
+				.get(embeddedContainer.getTomcat().getService())[0];
+		assertThat(((AbstractProtocol<?>) connector.getProtocolHandler()).getBacklog()).isEqualTo(10);
 	}
 
 	@Test
@@ -513,8 +515,9 @@ public class ServerPropertiesTests {
 		this.properties.customize(container);
 		TomcatEmbeddedServletContainer embeddedContainer = (TomcatEmbeddedServletContainer) container
 				.getEmbeddedServletContainer();
-		assertThat(((AbstractProtocol<?>) embeddedContainer.getTomcat().getConnector()
-				.getProtocolHandler()).getMaxConnections()).isEqualTo(5);
+		Connector connector = embeddedContainer.getServiceConnectors()
+				.get(embeddedContainer.getTomcat().getService())[0];
+		assertThat(((AbstractProtocol<?>) connector.getProtocolHandler()).getMaxConnections()).isEqualTo(5);
 	}
 
 	@Test
@@ -526,8 +529,9 @@ public class ServerPropertiesTests {
 		this.properties.customize(container);
 		TomcatEmbeddedServletContainer embeddedContainer = (TomcatEmbeddedServletContainer) container
 				.getEmbeddedServletContainer();
-		assertThat(embeddedContainer.getTomcat().getConnector().getMaxPostSize())
-				.isEqualTo(10000);
+		Connector connector = embeddedContainer.getServiceConnectors()
+				.get(embeddedContainer.getTomcat().getService())[0];
+		assertThat(connector.getMaxPostSize()).isEqualTo(10000);
 	}
 
 	@Test
@@ -540,8 +544,9 @@ public class ServerPropertiesTests {
 		this.properties.customize(container);
 		TomcatEmbeddedServletContainer embeddedContainer = (TomcatEmbeddedServletContainer) container
 				.getEmbeddedServletContainer();
-		assertThat(embeddedContainer.getTomcat().getConnector().getMaxPostSize())
-				.isEqualTo(2000);
+		Connector connector = embeddedContainer.getServiceConnectors()
+				.get(embeddedContainer.getTomcat().getService())[0];
+		assertThat(connector.getMaxPostSize()).isEqualTo(2000);
 	}
 
 	@Test
