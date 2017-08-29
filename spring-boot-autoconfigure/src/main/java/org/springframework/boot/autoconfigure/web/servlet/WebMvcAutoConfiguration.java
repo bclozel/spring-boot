@@ -16,6 +16,8 @@
 
 package org.springframework.boot.autoconfigure.web.servlet;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 
 import javax.servlet.Servlet;
 import javax.servlet.http.HttpServletRequest;
@@ -54,6 +57,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.filter.OrderedHiddenHttpMethodFilter;
 import org.springframework.boot.web.servlet.filter.OrderedHttpPutFormContentFilter;
 import org.springframework.boot.web.servlet.filter.OrderedRequestContextFilter;
+import org.springframework.context.ResourceLoaderAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -62,7 +66,9 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.Ordered;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.convert.converter.GenericConverter;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.format.Formatter;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.format.datetime.DateFormatter;
@@ -158,7 +164,7 @@ public class WebMvcAutoConfiguration {
 	@Configuration
 	@Import(EnableWebMvcConfiguration.class)
 	@EnableConfigurationProperties({ WebMvcProperties.class, ResourceProperties.class })
-	public static class WebMvcAutoConfigurationAdapter implements WebMvcConfigurer {
+	public static class WebMvcAutoConfigurationAdapter implements WebMvcConfigurer, ResourceLoaderAware {
 
 		private static final Log logger = LogFactory.getLog(WebMvcConfigurer.class);
 
@@ -172,6 +178,8 @@ public class WebMvcAutoConfiguration {
 
 		final ResourceHandlerRegistrationCustomizer resourceHandlerRegistrationCustomizer;
 
+		private ResourceLoader resourceLoader;
+
 		public WebMvcAutoConfigurationAdapter(ResourceProperties resourceProperties,
 				WebMvcProperties mvcProperties, ListableBeanFactory beanFactory,
 				@Lazy HttpMessageConverters messageConverters,
@@ -182,6 +190,11 @@ public class WebMvcAutoConfiguration {
 			this.messageConverters = messageConverters;
 			this.resourceHandlerRegistrationCustomizer = resourceHandlerRegistrationCustomizerProvider
 					.getIfAvailable();
+		}
+
+		@Override
+		public void setResourceLoader(ResourceLoader resourceLoader) {
+			this.resourceLoader = resourceLoader;
 		}
 
 		@Override
@@ -302,16 +315,34 @@ public class WebMvcAutoConfiguration {
 				customizeResourceHandlerRegistration(
 						registry.addResourceHandler(staticPathPattern)
 								.addResourceLocations(
-										this.resourceProperties.getStaticLocations())
+										this.resourceProperties.getResourceLocations())
 						.setCachePeriod(cachePeriod));
 			}
 		}
 
 		@Bean
-		public WelcomePageHandlerMapping welcomePageHandlerMapping(
-				ResourceProperties resourceProperties) {
-			return new WelcomePageHandlerMapping(resourceProperties.getWelcomePage(),
+		public WelcomePageHandlerMapping welcomePageHandlerMapping() {
+			return new WelcomePageHandlerMapping(getWelcomePage(),
 					this.mvcProperties.getStaticPathPattern());
+		}
+
+
+		private Optional<Resource> getWelcomePage() {
+			return Arrays.stream(this.resourceProperties.getResourceLocations())
+					.map(location -> this.resourceLoader.getResource(location + "index.html"))
+					.filter(resource -> {
+						try {
+							if (resource.exists()) {
+								resource.getURL();
+								return true;
+							}
+						}
+						catch (Exception ex) {
+							// Ignore
+						}
+						return false;
+					})
+					.findFirst();
 		}
 
 		private void customizeResourceHandlerRegistration(
@@ -331,12 +362,19 @@ public class WebMvcAutoConfiguration {
 
 		@Configuration
 		@ConditionalOnProperty(value = "spring.mvc.favicon.enabled", matchIfMissing = true)
-		public static class FaviconConfiguration {
+		public static class FaviconConfiguration implements ResourceLoaderAware {
 
 			private final ResourceProperties resourceProperties;
 
+			private ResourceLoader resourceLoader;
+
 			public FaviconConfiguration(ResourceProperties resourceProperties) {
 				this.resourceProperties = resourceProperties;
+			}
+
+			@Override
+			public void setResourceLoader(ResourceLoader resourceLoader) {
+				this.resourceLoader = resourceLoader;
 			}
 
 			@Bean
@@ -351,9 +389,17 @@ public class WebMvcAutoConfiguration {
 			@Bean
 			public ResourceHttpRequestHandler faviconRequestHandler() {
 				ResourceHttpRequestHandler requestHandler = new ResourceHttpRequestHandler();
-				requestHandler
-						.setLocations(this.resourceProperties.resolveFaviconLocations());
+				requestHandler.setLocations(resolveFaviconLocations());
 				return requestHandler;
+			}
+
+			private List<Resource> resolveFaviconLocations() {
+				String[] resourceLocations = this.resourceProperties.getResourceLocations();
+				List<Resource> locations = new ArrayList<>(resourceLocations.length + 1);
+				Arrays.stream(resourceLocations)
+						.forEach(location -> locations.add(this.resourceLoader.getResource(location)));
+				locations.add(new ClassPathResource("/"));
+				return Collections.unmodifiableList(locations);
 			}
 
 		}
@@ -546,9 +592,9 @@ public class WebMvcAutoConfiguration {
 		private static final Log logger = LogFactory
 				.getLog(WelcomePageHandlerMapping.class);
 
-		private WelcomePageHandlerMapping(Resource welcomePage,
+		private WelcomePageHandlerMapping(Optional<Resource> welcomePage,
 				String staticPathPattern) {
-			if (welcomePage != null && "/**".equals(staticPathPattern)) {
+			if (welcomePage.isPresent() && "/**".equals(staticPathPattern)) {
 				logger.info("Adding welcome page: " + welcomePage);
 				ParameterizableViewController controller = new ParameterizableViewController();
 				controller.setViewName("forward:index.html");

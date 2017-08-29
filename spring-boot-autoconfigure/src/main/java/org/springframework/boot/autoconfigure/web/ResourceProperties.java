@@ -16,15 +16,7 @@
 
 package org.springframework.boot.autoconfigure.web;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.ResourceLoaderAware;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 
 /**
  * Properties used to configure resource handling.
@@ -36,7 +28,7 @@ import org.springframework.core.io.ResourceLoader;
  * @since 1.1.0
  */
 @ConfigurationProperties(prefix = "spring.resources", ignoreUnknownFields = false)
-public class ResourceProperties implements ResourceLoaderAware {
+public class ResourceProperties {
 
 	private static final String[] SERVLET_RESOURCE_LOCATIONS = { "/" };
 
@@ -44,22 +36,16 @@ public class ResourceProperties implements ResourceLoaderAware {
 			"classpath:/META-INF/resources/", "classpath:/resources/",
 			"classpath:/static/", "classpath:/public/" };
 
-	private static final String[] RESOURCE_LOCATIONS;
-
-	static {
-		RESOURCE_LOCATIONS = new String[CLASSPATH_RESOURCE_LOCATIONS.length
-				+ SERVLET_RESOURCE_LOCATIONS.length];
-		System.arraycopy(SERVLET_RESOURCE_LOCATIONS, 0, RESOURCE_LOCATIONS, 0,
-				SERVLET_RESOURCE_LOCATIONS.length);
-		System.arraycopy(CLASSPATH_RESOURCE_LOCATIONS, 0, RESOURCE_LOCATIONS,
-				SERVLET_RESOURCE_LOCATIONS.length, CLASSPATH_RESOURCE_LOCATIONS.length);
-	}
+	/**
+	 * Locations of Servlet resources. Defaults to context:/ (the root of the servlet context).
+	 */
+	private String[] servletLocations = SERVLET_RESOURCE_LOCATIONS;
 
 	/**
 	 * Locations of static resources. Defaults to classpath:[/META-INF/resources/,
-	 * /resources/, /static/, /public/] plus context:/ (the root of the servlet context).
+	 * /resources/, /static/, /public/].
 	 */
-	private String[] staticLocations = RESOURCE_LOCATIONS;
+	private String[] staticLocations = CLASSPATH_RESOURCE_LOCATIONS;
 
 	/**
 	 * Cache period for the resources served by the resource handler, in seconds.
@@ -73,12 +59,6 @@ public class ResourceProperties implements ResourceLoaderAware {
 
 	private final Chain chain = new Chain();
 
-	private ResourceLoader resourceLoader;
-
-	@Override
-	public void setResourceLoader(ResourceLoader resourceLoader) {
-		this.resourceLoader = resourceLoader;
-	}
 
 	public String[] getStaticLocations() {
 		return this.staticLocations;
@@ -88,6 +68,23 @@ public class ResourceProperties implements ResourceLoaderAware {
 		this.staticLocations = appendSlashIfNecessary(staticLocations);
 	}
 
+	public String[] getServletLocations() {
+		return this.servletLocations;
+	}
+
+	public void setServletLocations(String[] servletLocations) {
+		this.servletLocations = appendSlashIfNecessary(servletLocations);
+	}
+
+	public String[] getResourceLocations() {
+		String[] resourceLocations = new String[this.staticLocations.length + this.servletLocations.length];
+		System.arraycopy(this.servletLocations, 0, resourceLocations, 0,
+				this.servletLocations.length);
+		System.arraycopy(this.staticLocations, 0, resourceLocations,
+				this.servletLocations.length, this.staticLocations.length);
+		return resourceLocations;
+	}
+
 	private String[] appendSlashIfNecessary(String[] staticLocations) {
 		String[] normalized = new String[staticLocations.length];
 		for (int i = 0; i < staticLocations.length; i++) {
@@ -95,45 +92,6 @@ public class ResourceProperties implements ResourceLoaderAware {
 			normalized[i] = (location.endsWith("/") ? location : location + "/");
 		}
 		return normalized;
-	}
-
-	public Resource getWelcomePage() {
-		for (String location : getStaticWelcomePageLocations()) {
-			Resource resource = this.resourceLoader.getResource(location);
-			try {
-				if (resource.exists()) {
-					resource.getURL();
-					return resource;
-				}
-			}
-			catch (Exception ex) {
-				// Ignore
-			}
-		}
-		return null;
-	}
-
-	private String[] getStaticWelcomePageLocations() {
-		String[] result = new String[this.staticLocations.length];
-		for (int i = 0; i < result.length; i++) {
-			String location = this.staticLocations[i];
-			if (!location.endsWith("/")) {
-				location = location + "/";
-			}
-			result[i] = location + "index.html";
-		}
-		return result;
-	}
-
-	public List<Resource> resolveFaviconLocations() {
-		List<Resource> locations = new ArrayList<>(this.staticLocations.length + 1);
-		if (this.resourceLoader != null) {
-			for (String location : this.staticLocations) {
-				locations.add(this.resourceLoader.getResource(location));
-			}
-		}
-		locations.add(new ClassPathResource("/"));
-		return Collections.unmodifiableList(locations);
 	}
 
 	public Integer getCachePeriod() {

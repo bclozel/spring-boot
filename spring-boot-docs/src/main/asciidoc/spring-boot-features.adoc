@@ -1900,8 +1900,9 @@ can be achieved as follows:
 ----
 
 You can also customize the static resource locations using
-`spring.resources.static-locations` (replacing the default values with a list of directory
-locations). If you do this the default welcome page detection will switch to your custom
+`spring.resources.static-locations` and `spring.resources.servlet-locations`
+(replacing the default values with a list of directory locations).
+If you do this the default welcome page detection will switch to your custom
 locations, so if there is an `index.html` in any of your locations on startup, it will be
 the home page of the application.
 
