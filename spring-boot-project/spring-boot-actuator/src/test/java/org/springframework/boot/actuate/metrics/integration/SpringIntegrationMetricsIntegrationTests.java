@@ -21,7 +21,6 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Statistic;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -58,12 +57,11 @@ public class SpringIntegrationMetricsIntegrationTests {
 	public void springIntegrationMetrics() {
 		this.converter.fahrenheitToCelsius(68.0);
 		assertThat(this.registry.find("spring.integration.channel.sends")
-				.tags("channel", "convert.input").value(Statistic.Count, 1).meter())
-						.isPresent();
-		assertThat(this.registry.find("spring.integration.handler.duration.min").meter())
-				.isPresent();
-		assertThat(this.registry.find("spring.integration.sourceNames").meter())
-				.isPresent();
+				.tags("channel", "convert.input").meter()).isNotNull();
+		assertThat(this.registry.mustFind("spring.integration.handler.duration.min").meter())
+				.isNotNull();
+		assertThat(this.registry.mustFind("spring.integration.sourceNames").meter())
+				.isNotNull();
 	}
 
 	@Configuration

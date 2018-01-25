@@ -64,7 +64,7 @@ public class WebMvcMetrics {
 
 	private static final Log logger = LogFactory.getLog(WebMvcMetrics.class);
 
-	private final Map<HttpServletRequest, Long> longTaskTimerIds = Collections
+	private final Map<HttpServletRequest, LongTaskTimer.Sample> longTaskTimerIds = Collections
 			.synchronizedMap(new IdentityHashMap<>());
 
 	private final MeterRegistry registry;
@@ -138,8 +138,7 @@ public class WebMvcMetrics {
 	private void completeLongTimerTask(HttpServletRequest request, Object handler,
 			TimerConfig config) {
 		if (config.getName() != null) {
-			longTaskTimer(config, request, handler)
-					.stop(this.longTaskTimerIds.remove(request));
+			this.longTaskTimerIds.remove(request).stop();
 		}
 	}
 

@@ -48,10 +48,10 @@ public class CacheMetricsConfigurationTests {
 		this.contextRunner.withPropertyValues("spring.cache.type=caffeine",
 				"spring.cache.cache-names=cache1,cache2").run((context) -> {
 					MeterRegistry registry = context.getBean(MeterRegistry.class);
-					assertThat(registry.find("cache.requests").tags("name", "cache1")
-							.tags("cacheManager", "cacheManager").meter()).isPresent();
-					assertThat(registry.find("cache.requests").tags("name", "cache2")
-							.tags("cacheManager", "cacheManager").meter()).isPresent();
+					assertThat(registry.mustFind("cache.requests").tags("name", "cache1")
+							.tags("cacheManager", "cacheManager").meter()).isNotNull();
+					assertThat(registry.mustFind("cache.requests").tags("name", "cache2")
+							.tags("cacheManager", "cacheManager").meter()).isNotNull();
 				});
 	}
 
@@ -64,9 +64,9 @@ public class CacheMetricsConfigurationTests {
 				.run((context) -> {
 					MeterRegistry registry = context.getBean(MeterRegistry.class);
 					assertThat(
-							registry.find("custom.name.requests").tags("name", "cache1")
+							registry.mustFind("custom.name.requests").tags("name", "cache1")
 									.tags("cacheManager", "cacheManager").meter())
-											.isPresent();
+											.isNotNull();
 				});
 	}
 
@@ -76,9 +76,9 @@ public class CacheMetricsConfigurationTests {
 				"spring.cache.cache-names=cache1,cache2").run((context) -> {
 					MeterRegistry registry = context.getBean(MeterRegistry.class);
 					assertThat(registry.find("cache.requests").tags("name", "cache1")
-							.tags("cacheManager", "cacheManager").meter()).isNotPresent();
+							.tags("cacheManager", "cacheManager").meter()).isNull();
 					assertThat(registry.find("cache.requests").tags("name", "cache2")
-							.tags("cacheManager", "cacheManager").meter()).isNotPresent();
+							.tags("cacheManager", "cacheManager").meter()).isNull();
 				});
 	}
 
@@ -90,7 +90,7 @@ public class CacheMetricsConfigurationTests {
 				.run((context) -> {
 					MeterRegistry registry = context.getBean(MeterRegistry.class);
 					assertThat(registry.find("cache.requests").tags("name", "cache1")
-							.tags("cacheManager", "cacheManager").meter()).isNotPresent();
+							.tags("cacheManager", "cacheManager").meter()).isNull();
 				});
 	}
 

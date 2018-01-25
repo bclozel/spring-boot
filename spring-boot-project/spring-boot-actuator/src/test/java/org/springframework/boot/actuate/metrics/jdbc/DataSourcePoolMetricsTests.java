@@ -53,7 +53,7 @@ public class DataSourcePoolMetricsTests {
 				.run((context) -> {
 					context.getBean(DataSource.class).getConnection().getMetaData();
 					assertThat(context.getBean(MeterRegistry.class)
-							.find("data.source.max.connections").meter()).isPresent();
+							.mustFind("data.source.max.connections").meter()).isNotNull();
 				});
 	}
 
