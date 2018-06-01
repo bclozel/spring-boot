@@ -21,7 +21,7 @@ import java.util.Arrays;
 
 import org.junit.Test;
 import org.mockito.InOrder;
-import reactor.ipc.netty.http.server.HttpServerOptions;
+import reactor.netty.http.server.HttpServer;
 
 import org.springframework.boot.web.reactive.server.AbstractReactiveWebServerFactory;
 import org.springframework.boot.web.reactive.server.AbstractReactiveWebServerFactoryTests;
@@ -30,6 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 
@@ -63,12 +64,14 @@ public class NettyReactiveWebServerFactoryTests
 		NettyServerCustomizer[] customizers = new NettyServerCustomizer[2];
 		for (int i = 0; i < customizers.length; i++) {
 			customizers[i] = mock(NettyServerCustomizer.class);
+			given(customizers[i].apply(any(HttpServer.class)))
+					.will((invocation) -> invocation.getArgument(0));
 		}
 		factory.setServerCustomizers(Arrays.asList(customizers[0], customizers[1]));
 		this.webServer = factory.getWebServer(new EchoHandler());
 		InOrder ordered = inOrder((Object[]) customizers);
 		for (NettyServerCustomizer customizer : customizers) {
-			ordered.verify(customizer).customize(any(HttpServerOptions.Builder.class));
+			ordered.verify(customizer).apply(any(HttpServer.class));
 		}
 	}
 
@@ -79,7 +82,7 @@ public class NettyReactiveWebServerFactoryTests
 		factory.setLifecycleTimeout(timeout);
 		this.webServer = factory.getWebServer(new EchoHandler());
 		this.webServer.start();
-		Object context = ReflectionTestUtils.getField(this.webServer, "nettyContext");
+		Object context = ReflectionTestUtils.getField(this.webServer, "disposableServer");
 		Object actualTimeout = ReflectionTestUtils.getField(context, "lifecycleTimeout");
 		assertThat(actualTimeout).isEqualTo(timeout);
 	}

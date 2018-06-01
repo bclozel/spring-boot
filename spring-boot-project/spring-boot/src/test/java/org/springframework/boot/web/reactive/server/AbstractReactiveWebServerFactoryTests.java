@@ -23,7 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.function.Consumer;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLException;
@@ -38,9 +37,10 @@ import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.ipc.netty.NettyPipeline;
-import reactor.ipc.netty.http.client.HttpClientOptions;
+import reactor.netty.NettyPipeline;
+import reactor.netty.http.client.HttpClient;
 import reactor.test.StepVerifier;
 
 import org.springframework.boot.testsupport.rule.OutputCapture;
@@ -135,9 +135,11 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	protected ReactorClientHttpConnector buildTrustAllSslConnector() {
-		return new ReactorClientHttpConnector((options) -> options.sslSupport(
-				(sslContextBuilder) -> sslContextBuilder.sslProvider(SslProvider.JDK)
-						.trustManager(InsecureTrustManagerFactory.INSTANCE)));
+		HttpClient client = HttpClient.create()
+				.secure((sslContextSpec) -> sslContextSpec.forClient()
+						.sslContext((builder) -> builder.sslProvider(SslProvider.JDK)
+								.trustManager(InsecureTrustManagerFactory.INSTANCE)));
+		return new ReactorClientHttpConnector(client);
 	}
 
 	@Test
@@ -169,10 +171,12 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 		KeyManagerFactory clientKeyManagerFactory = KeyManagerFactory
 				.getInstance(KeyManagerFactory.getDefaultAlgorithm());
 		clientKeyManagerFactory.init(clientKeyStore, "password".toCharArray());
-		return new ReactorClientHttpConnector((options) -> options.sslSupport(
-				(sslContextBuilder) -> sslContextBuilder.sslProvider(SslProvider.JDK)
-						.trustManager(InsecureTrustManagerFactory.INSTANCE)
-						.keyManager(clientKeyManagerFactory)));
+		HttpClient client = HttpClient.create().wiretap()
+				.secure((sslContextSpec) -> sslContextSpec.forClient()
+						.sslContext((builder) -> builder.sslProvider(SslProvider.JDK)
+								.trustManager(InsecureTrustManagerFactory.INSTANCE)
+								.keyManager(clientKeyManagerFactory)));
+		return new ReactorClientHttpConnector(client);
 	}
 
 	protected void testClientAuthSuccess(Ssl sslConfiguration,
@@ -183,6 +187,34 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 		this.webServer.start();
 		WebClient client = WebClient.builder()
 				.baseUrl("https://localhost:" + this.webServer.getPort())
+				.clientConnector(clientConnector).build();
+		Mono<String> result = client.post().uri("/test").contentType(MediaType.TEXT_PLAIN)
+				.body(BodyInserters.fromObject("Hello World")).exchange()
+				.flatMap((response) -> response.bodyToMono(String.class));
+		assertThat(result.block()).isEqualTo("Hello World");
+	}
+
+	@Test
+	public void servertest() {
+		Ssl ssl = new Ssl();
+		ssl.setClientAuth(Ssl.ClientAuth.NEED);
+		ssl.setKeyStore("classpath:test.jks");
+		ssl.setKeyPassword("password");
+		ssl.setTrustStore("classpath:test.jks");
+		AbstractReactiveWebServerFactory factory = getFactory();
+		factory.setSsl(ssl);
+		factory.setPort(8080);
+		this.webServer = factory.getWebServer(new EchoHandler());
+		this.webServer.start();
+		Flux.never().blockFirst();
+	}
+
+	@Test
+	public void clienttest() throws Exception {
+
+		ReactorClientHttpConnector clientConnector = buildTrustAllSslWithClientKeyConnector();
+		WebClient client = WebClient.builder()
+				.baseUrl("https://localhost:" + 8080)
 				.clientConnector(clientConnector).build();
 		Mono<String> result = client.post().uri("/test").contentType(MediaType.TEXT_PLAIN)
 				.body(BodyInserters.fromObject("Hello World")).exchange()
@@ -228,16 +260,13 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	protected WebClient.Builder getWebClient() {
-		return getWebClient((options) -> {
-		});
+		return getWebClient(HttpClient.create());
 	}
 
-	protected WebClient.Builder getWebClient(
-			Consumer<? super HttpClientOptions.Builder> clientOptions) {
+	protected WebClient.Builder getWebClient(HttpClient client) {
 		InetSocketAddress address = new InetSocketAddress(this.webServer.getPort());
 		String baseUrl = "http://" + address.getHostString() + ":" + address.getPort();
-		return WebClient.builder()
-				.clientConnector(new ReactorClientHttpConnector(clientOptions))
+		return WebClient.builder().clientConnector(new ReactorClientHttpConnector(client))
 				.baseUrl(baseUrl);
 	}
 
@@ -302,10 +331,12 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 		this.webServer = factory
 				.getWebServer(new CharsHandler(3000, MediaType.TEXT_PLAIN));
 		this.webServer.start();
-		return getWebClient((options) -> options.compression(true)
-				.afterChannelInit((channel) -> channel.pipeline().addBefore(
-						NettyPipeline.HttpDecompressor, "CompressionTest",
-						new CompressionDetectionHandler()))).build();
+
+		HttpClient client = HttpClient.create().compress().tcpConfiguration(
+				(tcpClient) -> tcpClient.doOnConnected((connection) -> connection
+						.channel().pipeline().addBefore(NettyPipeline.HttpDecompressor,
+								"CompressionTest", new CompressionDetectionHandler())));
+		return getWebClient(client).build();
 	}
 
 	protected void assertResponseIsCompressed(ResponseEntity<Void> response) {
