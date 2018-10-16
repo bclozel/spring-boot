@@ -49,6 +49,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.handler.MatchableHandlerMapping;
 import org.springframework.web.servlet.handler.RequestMatchResult;
@@ -132,6 +133,11 @@ public abstract class AbstractWebMvcEndpointHandlerMapping
 	}
 
 	@Override
+	protected HandlerMethod createHandlerMethod(Object handler, Method method) {
+		return new WebMvcEndpointHandlerMethod(handler, method);
+	}
+
+	@Override
 	public RequestMatchResult match(HttpServletRequest request, String pattern) {
 		RequestMappingInfo info = RequestMappingInfo.paths(pattern).options(builderConfig)
 				.build();
@@ -156,9 +162,8 @@ public abstract class AbstractWebMvcEndpointHandlerMapping
 
 	private void registerMappingForOperation(ExposableWebEndpoint endpoint,
 			WebOperation operation) {
-		OperationInvoker invoker = operation::invoke;
 		ServletWebOperation servletWebOperation = wrapServletWebOperation(endpoint,
-				operation, new ServletWebOperationAdapter(invoker));
+				operation, new ServletWebOperationAdapter(operation));
 		registerMapping(createRequestMappingInfo(operation),
 				new OperationHandler(servletWebOperation), this.handleMethod);
 	}
@@ -259,10 +264,10 @@ public abstract class AbstractWebMvcEndpointHandlerMapping
 	 */
 	private class ServletWebOperationAdapter implements ServletWebOperation {
 
-		private final OperationInvoker invoker;
+		private final WebOperation operation;
 
-		ServletWebOperationAdapter(OperationInvoker invoker) {
-			this.invoker = invoker;
+		ServletWebOperationAdapter(WebOperation operation) {
+			this.operation = operation;
 		}
 
 		@Override
@@ -271,13 +276,18 @@ public abstract class AbstractWebMvcEndpointHandlerMapping
 			Map<String, Object> arguments = getArguments(request, body);
 			try {
 				return handleResult(
-						this.invoker.invoke(new InvocationContext(
+						this.operation.invoke(new InvocationContext(
 								new ServletSecurityContext(request), arguments)),
 						HttpMethod.valueOf(request.getMethod()));
 			}
 			catch (InvalidEndpointRequestException ex) {
 				throw new BadOperationRequestException(ex.getReason());
 			}
+		}
+
+		@Override
+		public String toString() {
+			return this.operation.toString();
 		}
 
 		private Map<String, Object> getArguments(HttpServletRequest request,
@@ -328,6 +338,29 @@ public abstract class AbstractWebMvcEndpointHandlerMapping
 		public Object handle(HttpServletRequest request,
 				@RequestBody(required = false) Map<String, String> body) {
 			return this.operation.handle(request, body);
+		}
+
+		@Override
+		public String toString() {
+			return this.operation.toString();
+		}
+
+	}
+
+	private static class WebMvcEndpointHandlerMethod extends HandlerMethod {
+
+		WebMvcEndpointHandlerMethod(Object bean, Method method) {
+			super(bean, method);
+		}
+
+		@Override
+		public String toString() {
+			return getBean().toString();
+		}
+
+		@Override
+		public HandlerMethod createWithResolvedBean() {
+			return this;
 		}
 
 	}
