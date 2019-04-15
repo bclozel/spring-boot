@@ -32,11 +32,15 @@ public class ElasticsearchContainer extends Container {
 		super("elasticsearch:6.4.3", 9200,
 				(container) -> container.withStartupTimeout(Duration.ofSeconds(120))
 						.withStartupAttempts(5).withEnv("discovery.type", "single-node")
-						.addExposedPort(9300));
+						.addExposedPorts(9200, 9300));
 	}
 
 	public int getMappedTransportPort() {
 		return getContainer().getMappedPort(9300);
+	}
+
+	public int getMappedHttpPort() {
+		return getContainer().getMappedPort(9200);
 	}
 
 	@Override
