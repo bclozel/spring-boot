@@ -59,6 +59,7 @@ class WebMvcEndpointChildContextConfigurationIntegrationTests {
 					WebClient client = WebClient.create("http://localhost:" + port);
 					ClientResponse response = client.get().uri("actuator/fail").accept(MediaType.APPLICATION_JSON)
 							.exchange().block();
+					assertThat(response.headers().contentType().get()).isEqualTo(MediaType.APPLICATION_JSON);
 					assertThat(response.bodyToMono(String.class).block()).contains("message\":\"Epic Fail");
 				});
 	}

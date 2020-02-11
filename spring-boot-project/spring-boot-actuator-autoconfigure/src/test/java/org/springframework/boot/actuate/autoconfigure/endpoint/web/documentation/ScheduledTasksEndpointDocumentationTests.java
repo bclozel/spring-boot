@@ -52,7 +52,7 @@ class ScheduledTasksEndpointDocumentationTests extends MockMvcEndpointDocumentat
 
 	@Test
 	void scheduledTasks() throws Exception {
-		this.mockMvc.perform(get("/actuator/scheduledtasks")).andExpect(status().isOk())
+		this.mockMvc.perform(get("/actuator/scheduledtasks").accept("application/json")).andExpect(status().isOk())
 				.andDo(document("scheduled-tasks",
 						preprocessResponse(replacePattern(
 								Pattern.compile("org.*\\.ScheduledTasksEndpointDocumentationTests\\$TestConfiguration"),
