@@ -1,0 +1,55 @@
+/*
+ * Copyright 2012-2020 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.springframework.boot.actuate.kubernetes;
+
+import org.junit.jupiter.api.Test;
+
+import org.springframework.boot.kubernetes.ApplicationStateProvider;
+import org.springframework.boot.kubernetes.LivenessState;
+import org.springframework.boot.kubernetes.ReadinessState;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+
+/**
+ * Tests for {@link ProbesEndpoint}.
+ *
+ * @author Brian Clozel
+ */
+class ProbesEndpointTests {
+
+	@Test
+	void probeStatus() {
+		ApplicationStateProvider applicationStateProvider = mock(ApplicationStateProvider.class);
+		given(applicationStateProvider.getLivenessState()).willReturn(LivenessState.broken());
+		given(applicationStateProvider.getReadinessState()).willReturn(ReadinessState.ready());
+		ProbesEndpoint endpoint = new ProbesEndpoint(applicationStateProvider);
+		assertThat(endpoint.probe("liveness")).isNotNull().extracting("status")
+				.isEqualTo(ProbesEndpoint.ProbeReport.Status.FAILURE);
+		assertThat(endpoint.probe("readiness")).isNotNull().extracting("status")
+				.isEqualTo(ProbesEndpoint.ProbeReport.Status.SUCCESS);
+	}
+
+	@Test
+	void unknownProbe() {
+		ApplicationStateProvider applicationStateProvider = mock(ApplicationStateProvider.class);
+		ProbesEndpoint endpoint = new ProbesEndpoint(applicationStateProvider);
+		assertThat(endpoint.probe("unknown")).isNull();
+	}
+
+}

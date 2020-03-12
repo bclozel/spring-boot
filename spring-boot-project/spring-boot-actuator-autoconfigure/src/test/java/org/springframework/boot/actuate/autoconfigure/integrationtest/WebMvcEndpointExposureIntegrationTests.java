@@ -17,6 +17,8 @@
 package org.springframework.boot.actuate.autoconfigure.integrationtest;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import javax.servlet.ServletException;
@@ -43,12 +45,21 @@ import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.kubernetes.ApplicationStateProvider;
+import org.springframework.boot.kubernetes.LivenessState;
+import org.springframework.boot.kubernetes.ReadinessState;
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext;
 import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
@@ -63,11 +74,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Stephane Nicoll
  * @author Phillip Webb
+ * @author Brian Clozel
  */
 class WebMvcEndpointExposureIntegrationTests {
 
 	private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner(
 			AnnotationConfigServletWebServerApplicationContext::new)
+					.withInitializer(enableKubernetes())
 					.withConfiguration(AutoConfigurations.of(ServletWebServerFactoryAutoConfiguration.class,
 							DispatcherServletAutoConfiguration.class, JacksonAutoConfiguration.class,
 							HttpMessageConvertersAutoConfiguration.class, WebMvcAutoConfiguration.class,
@@ -77,7 +90,8 @@ class WebMvcEndpointExposureIntegrationTests {
 							HttpTraceAutoConfiguration.class, HealthContributorAutoConfiguration.class))
 					.withConfiguration(AutoConfigurations.of(EndpointAutoConfigurationClasses.ALL))
 					.withUserConfiguration(CustomMvcEndpoint.class, CustomServletEndpoint.class,
-							HttpTraceRepositoryConfiguration.class, AuditEventRepositoryConfiguration.class)
+							HttpTraceRepositoryConfiguration.class, AuditEventRepositoryConfiguration.class,
+							CustomApplicationStateConfiguration.class)
 					.withPropertyValues("server.port:0");
 
 	@Test
@@ -92,6 +106,8 @@ class WebMvcEndpointExposureIntegrationTests {
 			assertThat(isExposed(client, HttpMethod.GET, "env")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "health")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "info")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/liveness")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/readiness")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "mappings")).isFalse();
 			assertThat(isExposed(client, HttpMethod.POST, "shutdown")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "threaddump")).isFalse();
@@ -113,6 +129,8 @@ class WebMvcEndpointExposureIntegrationTests {
 			assertThat(isExposed(client, HttpMethod.GET, "env")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "health")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "info")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/liveness")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/readiness")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "mappings")).isTrue();
 			assertThat(isExposed(client, HttpMethod.POST, "shutdown")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "threaddump")).isTrue();
@@ -134,6 +152,8 @@ class WebMvcEndpointExposureIntegrationTests {
 			assertThat(isExposed(client, HttpMethod.GET, "env")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "health")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "info")).isFalse();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/liveness")).isFalse();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/readiness")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "mappings")).isFalse();
 			assertThat(isExposed(client, HttpMethod.POST, "shutdown")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "threaddump")).isFalse();
@@ -155,6 +175,8 @@ class WebMvcEndpointExposureIntegrationTests {
 			assertThat(isExposed(client, HttpMethod.GET, "env")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "health")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "info")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/liveness")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "probes/readiness")).isTrue();
 			assertThat(isExposed(client, HttpMethod.GET, "mappings")).isTrue();
 			assertThat(isExposed(client, HttpMethod.POST, "shutdown")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "threaddump")).isTrue();
@@ -182,6 +204,18 @@ class WebMvcEndpointExposureIntegrationTests {
 		}
 		throw new IllegalStateException(
 				String.format("Unexpected %s HTTP status for endpoint %s", result.getStatus(), path));
+	}
+
+	private ApplicationContextInitializer<ConfigurableApplicationContext> enableKubernetes() {
+		return (context) -> {
+			Map<String, Object> environmentVariables = new HashMap<>();
+			environmentVariables.put("KUBERNETES_SERVICE_HOST", "---");
+			environmentVariables.put("KUBERNETES_SERVICE_PORT", "8080");
+			ConfigurableEnvironment environment = context.getEnvironment();
+			PropertySource<?> propertySource = new SystemEnvironmentPropertySource(
+					StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, environmentVariables);
+			environment.getPropertySources().addFirst(propertySource);
+		};
 	}
 
 	@RestControllerEndpoint(id = "custommvc")
@@ -227,6 +261,16 @@ class WebMvcEndpointExposureIntegrationTests {
 		@Bean
 		InMemoryAuditEventRepository auditEventRepository() {
 			return new InMemoryAuditEventRepository();
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class CustomApplicationStateConfiguration {
+
+		@Bean
+		ApplicationStateProvider applicationStateProvider() {
+			return new ApplicationStateProvider(LivenessState.live(), ReadinessState.ready());
 		}
 
 	}

@@ -54,7 +54,8 @@
       "name": "management.endpoints.web.exposure.include",
       "defaultValue": [
         "health",
-        "info"
+        "info",
+        "probes"
       ]
     },
     {

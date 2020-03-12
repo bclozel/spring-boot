@@ -115,7 +115,7 @@ public class WebEndpointAutoConfiguration {
 	public ExposeExcludePropertyEndpointFilter<ExposableWebEndpoint> webExposeExcludePropertyEndpointFilter() {
 		WebEndpointProperties.Exposure exposure = this.properties.getExposure();
 		return new ExposeExcludePropertyEndpointFilter<>(ExposableWebEndpoint.class, exposure.getInclude(),
-				exposure.getExclude(), "info", "health");
+				exposure.getExclude(), "info", "health", "probes");
 	}
 
 	@Bean

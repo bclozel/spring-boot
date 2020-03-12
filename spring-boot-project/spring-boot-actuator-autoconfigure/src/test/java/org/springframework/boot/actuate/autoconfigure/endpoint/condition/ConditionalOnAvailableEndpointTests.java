@@ -40,7 +40,7 @@ class ConditionalOnAvailableEndpointTests {
 
 	@Test
 	void outcomeShouldMatchDefaults() {
-		this.contextRunner.run((context) -> assertThat(context).hasBean("info").hasBean("health")
+		this.contextRunner.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("probes")
 				.doesNotHaveBean("spring").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
 	}
 
@@ -48,14 +48,15 @@ class ConditionalOnAvailableEndpointTests {
 	void outcomeWithEnabledByDefaultSetToFalseShouldNotMatchAnything() {
 		this.contextRunner.withPropertyValues("management.endpoints.enabled-by-default=false")
 				.run((context) -> assertThat(context).doesNotHaveBean("info").doesNotHaveBean("health")
-						.doesNotHaveBean("spring").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("spring").doesNotHaveBean("test")
+						.doesNotHaveBean("shutdown"));
 	}
 
 	@Test
 	void outcomeWhenIncludeAllWebShouldMatchEnabledEndpoints() {
 		this.contextRunner.withPropertyValues("management.endpoints.web.exposure.include=*")
-				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("test")
-						.hasBean("spring").doesNotHaveBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("probes")
+						.hasBean("test").hasBean("spring").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -63,8 +64,8 @@ class ConditionalOnAvailableEndpointTests {
 		this.contextRunner
 				.withPropertyValues("management.endpoints.web.exposure.include=*",
 						"management.endpoint.test.enabled=false", "management.endpoint.health.enabled=false")
-				.run((context) -> assertThat(context).hasBean("info").doesNotHaveBean("health").doesNotHaveBean("test")
-						.hasBean("spring").doesNotHaveBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("info").hasBean("probes").doesNotHaveBean("health")
+						.doesNotHaveBean("test").hasBean("spring").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -72,22 +73,22 @@ class ConditionalOnAvailableEndpointTests {
 		this.contextRunner
 				.withPropertyValues("management.endpoints.web.exposure.include=*",
 						"management.endpoint.shutdown.enabled=true")
-				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("test")
-						.hasBean("spring").hasBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("probes")
+						.hasBean("test").hasBean("spring").hasBean("shutdown"));
 	}
 
 	@Test
 	void outcomeWhenIncludeAllJmxButJmxDisabledShouldMatchDefaults() {
 		this.contextRunner.withPropertyValues("management.endpoints.jmx.exposure.include=*")
-				.run((context) -> assertThat(context).hasBean("info").hasBean("health").doesNotHaveBean("spring")
-						.doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("probes")
+						.doesNotHaveBean("spring").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
 	void outcomeWhenIncludeAllJmxAndJmxEnabledShouldMatchEnabledEndpoints() {
 		this.contextRunner.withPropertyValues("management.endpoints.jmx.exposure.include=*", "spring.jmx.enabled=true")
-				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("test")
-						.hasBean("spring").doesNotHaveBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("probes")
+						.hasBean("test").hasBean("spring").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -95,8 +96,8 @@ class ConditionalOnAvailableEndpointTests {
 		this.contextRunner
 				.withPropertyValues("management.endpoints.jmx.exposure.include=*", "spring.jmx.enabled=true",
 						"management.endpoint.shutdown.enabled=true")
-				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("test")
-						.hasBean("spring").hasBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("probes")
+						.hasBean("test").hasBean("spring").hasBean("shutdown"));
 	}
 
 	@Test
@@ -104,8 +105,8 @@ class ConditionalOnAvailableEndpointTests {
 		this.contextRunner
 				.withPropertyValues("management.endpoints.web.exposure.include=*",
 						"management.endpoints.web.exposure.exclude=spring,info")
-				.run((context) -> assertThat(context).hasBean("health").hasBean("test").doesNotHaveBean("info")
-						.doesNotHaveBean("spring").doesNotHaveBean("shutdown"));
+				.run((context) -> assertThat(context).hasBean("health").hasBean("probes").hasBean("test")
+						.doesNotHaveBean("info").doesNotHaveBean("spring").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -114,21 +115,23 @@ class ConditionalOnAvailableEndpointTests {
 				.withPropertyValues("management.endpoints.web.exposure.include=info,health,spring,test",
 						"management.endpoints.web.exposure.exclude=spring,info")
 				.run((context) -> assertThat(context).hasBean("health").hasBean("test").doesNotHaveBean("info")
-						.doesNotHaveBean("spring").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("spring").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
 	void outcomeWhenIncludeMatchesShouldMatchEnabledEndpoints() {
 		this.contextRunner.withPropertyValues("management.endpoints.web.exposure.include=spring")
 				.run((context) -> assertThat(context).hasBean("spring").doesNotHaveBean("health")
-						.doesNotHaveBean("info").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("info").doesNotHaveBean("test")
+						.doesNotHaveBean("shutdown"));
 	}
 
 	@Test
 	void outcomeWhenIncludeMatchOnDisabledEndpointShouldNotMatch() {
 		this.contextRunner.withPropertyValues("management.endpoints.web.exposure.include=shutdown")
 				.run((context) -> assertThat(context).doesNotHaveBean("spring").doesNotHaveBean("health")
-						.doesNotHaveBean("info").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("info").doesNotHaveBean("test")
+						.doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -137,14 +140,15 @@ class ConditionalOnAvailableEndpointTests {
 				.withPropertyValues("management.endpoints.web.exposure.include=shutdown",
 						"management.endpoint.shutdown.enabled=true")
 				.run((context) -> assertThat(context).doesNotHaveBean("spring").doesNotHaveBean("health")
-						.doesNotHaveBean("info").doesNotHaveBean("test").hasBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("info").doesNotHaveBean("test").hasBean("shutdown"));
 	}
 
 	@Test
 	void outcomeWhenIncludeMatchesWithCaseShouldMatch() {
 		this.contextRunner.withPropertyValues("management.endpoints.web.exposure.include=sPRing")
 				.run((context) -> assertThat(context).hasBean("spring").doesNotHaveBean("health")
-						.doesNotHaveBean("info").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("info").doesNotHaveBean("probes").doesNotHaveBean("test")
+						.doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -153,7 +157,8 @@ class ConditionalOnAvailableEndpointTests {
 				.withPropertyValues("management.endpoints.web.exposure.include=info,health,spring,test",
 						"management.endpoints.web.exposure.exclude=*")
 				.run((context) -> assertThat(context).doesNotHaveBean("health").doesNotHaveBean("info")
-						.doesNotHaveBean("spring").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("spring").doesNotHaveBean("test")
+						.doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -162,7 +167,7 @@ class ConditionalOnAvailableEndpointTests {
 				.withPropertyValues("management.endpoints.web.exposure.include=spring")
 				.run((context) -> assertThat(context).hasBean("spring").hasBean("springComponent")
 						.hasBean("springExtension").doesNotHaveBean("info").doesNotHaveBean("health")
-						.doesNotHaveBean("test").doesNotHaveBean("shutdown"));
+						.doesNotHaveBean("probes").doesNotHaveBean("test").doesNotHaveBean("shutdown"));
 	}
 
 	@Test
@@ -178,8 +183,8 @@ class ConditionalOnAvailableEndpointTests {
 
 	@Test
 	void outcomeOnCloudFoundryShouldMatchAll() {
-		this.contextRunner.withPropertyValues("VCAP_APPLICATION:---").run(
-				(context) -> assertThat(context).hasBean("info").hasBean("health").hasBean("spring").hasBean("test"));
+		this.contextRunner.withPropertyValues("VCAP_APPLICATION:---").run((context) -> assertThat(context)
+				.hasBean("info").hasBean("health").hasBean("probes").hasBean("spring").hasBean("test"));
 	}
 
 	@Endpoint(id = "health")
@@ -189,6 +194,11 @@ class ConditionalOnAvailableEndpointTests {
 
 	@Endpoint(id = "info")
 	static class InfoEndpoint {
+
+	}
+
+	@Endpoint(id = "probes")
+	static class ProbesEndpoint {
 
 	}
 
@@ -234,6 +244,12 @@ class ConditionalOnAvailableEndpointTests {
 		@ConditionalOnAvailableEndpoint
 		InfoEndpoint info() {
 			return new InfoEndpoint();
+		}
+
+		@Bean
+		@ConditionalOnAvailableEndpoint
+		ProbesEndpoint probes() {
+			return new ProbesEndpoint();
 		}
 
 		@Bean

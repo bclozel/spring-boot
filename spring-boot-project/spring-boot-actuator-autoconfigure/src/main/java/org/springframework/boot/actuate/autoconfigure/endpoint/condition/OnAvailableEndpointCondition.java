@@ -84,7 +84,7 @@ class OnAvailableEndpointCondition extends AbstractEndpointCondition {
 			if (environment.getProperty(JMX_ENABLED_KEY, Boolean.class, false)) {
 				exposureInformations.add(new ExposureInformation(binder, "jmx", "*"));
 			}
-			exposureInformations.add(new ExposureInformation(binder, "web", "info", "health"));
+			exposureInformations.add(new ExposureInformation(binder, "web", "info", "health", "probes"));
 			endpointExposureCache.put(environment, exposureInformations);
 		}
 		return exposureInformations;
