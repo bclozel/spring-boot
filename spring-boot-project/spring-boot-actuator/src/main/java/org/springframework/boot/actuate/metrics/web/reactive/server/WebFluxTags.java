@@ -16,6 +16,9 @@
 
 package org.springframework.boot.actuate.metrics.web.reactive.server;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import io.micrometer.core.instrument.Tag;
@@ -50,6 +53,9 @@ public final class WebFluxTags {
 	private static final Tag EXCEPTION_NONE = Tag.of("exception", "None");
 
 	private static final Pattern FORWARD_SLASHES_PATTERN = Pattern.compile("//+");
+
+	private static final Set<String> DISCONNECTED_CLIENT_EXCEPTIONS =
+			new HashSet(Arrays.asList("AbortedException", "ClientAbortException", "EOFException", "EofException"));
 
 	private WebFluxTags() {
 	}
@@ -165,11 +171,30 @@ public final class WebFluxTags {
 	 * @param exchange the exchange
 	 * @return the outcome tag derived from the response status
 	 * @since 2.1.0
+	 * @deprecated as of 2.5.0 in favor of {@link #outcome(ServerWebExchange, Throwable)}
 	 */
 	public static Tag outcome(ServerWebExchange exchange) {
-		Integer statusCode = extractStatusCode(exchange);
-		Outcome outcome = (statusCode != null) ? Outcome.forStatus(statusCode) : Outcome.SUCCESS;
-		return outcome.asTag();
+		return outcome(exchange, null);
+	}
+
+	/**
+	 * Creates an {@code outcome} tag based on the response status of the given
+	 * {@code exchange} and the exception thrown during request processing.
+	 * @param exchange the exchange
+	 * @param exception the exception, may be {@code null}
+	 * @return the outcome tag derived from the response status
+	 * @since 2.5.0
+	 */
+	public static Tag outcome(ServerWebExchange exchange, Throwable exception) {
+		if (exception != null &&
+				DISCONNECTED_CLIENT_EXCEPTIONS.contains(exception.getClass().getSimpleName())) {
+			return Outcome.CLIENT_ERROR.asTag();
+		}
+		else {
+			Integer statusCode = extractStatusCode(exchange);
+			Outcome outcome = (statusCode != null) ? Outcome.forStatus(statusCode) : Outcome.SUCCESS;
+			return outcome.asTag();
+		}
 	}
 
 	private static Integer extractStatusCode(ServerWebExchange exchange) {
