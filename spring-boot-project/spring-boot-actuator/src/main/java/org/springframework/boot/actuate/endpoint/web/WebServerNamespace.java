@@ -17,22 +17,36 @@
 package org.springframework.boot.actuate.endpoint.web;
 
 /**
+ * Enumeration of server namespaces.
+ *
  * @author Phillip Webb
+ * @author Madhura Bhave
+ * @since 2.6.0
  */
-public final class WebServerNamespace {
+public enum WebServerNamespace {
 
-	public static final WebServerNamespace SERVER = null;
+	/**
+	 * Represents the main application context.
+	 */
+	SERVER("server"),
 
-	public static final WebServerNamespace MANAGEMENT = null;
+	/**
+	 * Represents the management context.
+	 */
+	MANAGEMENT("management");
 
 	private final String value;
 
-	private WebServerNamespace(String value) {
+	WebServerNamespace(String value) {
 		this.value = value;
 	}
 
-	public static WebServerNamespace of(String value) {
-		return (value != null) ? new WebServerNamespace(value) : null;
+	public static WebServerNamespace from(String value) {
+		return (!"management".equals(value)) ? SERVER : MANAGEMENT;
+	}
+
+	public String getValue() {
+		return this.value;
 	}
 
 }

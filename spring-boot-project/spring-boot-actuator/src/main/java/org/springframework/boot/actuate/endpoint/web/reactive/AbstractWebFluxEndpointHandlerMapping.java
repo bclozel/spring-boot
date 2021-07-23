@@ -31,6 +31,7 @@ import reactor.core.scheduler.Schedulers;
 
 import org.springframework.boot.actuate.endpoint.InvalidEndpointRequestException;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
+import org.springframework.boot.actuate.endpoint.OperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.OperationType;
 import org.springframework.boot.actuate.endpoint.ProducibleOperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
@@ -41,6 +42,8 @@ import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
 import org.springframework.boot.actuate.endpoint.web.WebOperationRequestPredicate;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -51,6 +54,7 @@ import org.springframework.security.access.vote.RoleVoter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
+import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
@@ -64,6 +68,7 @@ import org.springframework.web.reactive.result.method.RequestMappingInfo;
 import org.springframework.web.reactive.result.method.RequestMappingInfoHandlerMapping;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.util.pattern.PathPattern;
 
 /**
  * A custom {@link HandlerMapping} that makes web endpoints available over HTTP using
@@ -132,16 +137,23 @@ public abstract class AbstractWebFluxEndpointHandlerMapping extends RequestMappi
 	}
 
 	private void registerMappingForOperation(ExposableWebEndpoint endpoint, WebOperation operation) {
-		ReactiveWebOperation reactiveWebOperation = wrapReactiveWebOperation(endpoint, operation,
-				new ReactiveWebOperationAdapter(operation));
+		RequestMappingInfo requestMappingInfo = createRequestMappingInfo(operation);
 		if (operation.getType() == OperationType.WRITE) {
-			registerMapping(createRequestMappingInfo(operation), new WriteOperationHandler((reactiveWebOperation)),
+			ReactiveWebOperation reactiveWebOperation = wrapReactiveWebOperation(endpoint, operation,
+					new ReactiveWebOperationAdapter(operation));
+			registerMapping(requestMappingInfo, new WriteOperationHandler((reactiveWebOperation)),
 					this.handleWriteMethod);
 		}
 		else {
-			registerMapping(createRequestMappingInfo(operation), new ReadOperationHandler((reactiveWebOperation)),
-					this.handleReadMethod);
+			registerReadMapping(requestMappingInfo, endpoint, operation);
 		}
+	}
+
+	protected void registerReadMapping(RequestMappingInfo requestMappingInfo, ExposableWebEndpoint endpoint,
+			WebOperation operation) {
+		ReactiveWebOperation reactiveWebOperation = wrapReactiveWebOperation(endpoint, operation,
+				new ReactiveWebOperationAdapter(operation));
+		registerMapping(requestMappingInfo, new ReadOperationHandler((reactiveWebOperation)), this.handleReadMethod);
 	}
 
 	/**
@@ -299,38 +311,60 @@ public abstract class AbstractWebFluxEndpointHandlerMapping extends RequestMappi
 		@Override
 		public Mono<ResponseEntity<Object>> handle(ServerWebExchange exchange, Map<String, String> body) {
 			Map<String, Object> arguments = getArguments(exchange, body);
-			String matchAllRemainingPathSegmentsVariable = this.operation.getRequestPredicate()
-					.getMatchAllRemainingPathSegmentsVariable();
-			if (matchAllRemainingPathSegmentsVariable != null) {
-				arguments.put(matchAllRemainingPathSegmentsVariable,
-						tokenizePathSegments((String) arguments.get(matchAllRemainingPathSegmentsVariable)));
-			}
+			OperationArgumentResolver serverNamespaceArgumentResolver = OperationArgumentResolver
+					.of(WebServerNamespace.class, () -> WebServerNamespace
+							.from(WebServerApplicationContext.getServerNamepace(exchange.getApplicationContext())));
 			return this.securityContextSupplier.get()
 					.map((securityContext) -> new InvocationContext(securityContext, arguments,
+							serverNamespaceArgumentResolver,
 							new ProducibleOperationArgumentResolver(
 									() -> exchange.getRequest().getHeaders().get("Accept"))))
 					.flatMap((invocationContext) -> handleResult((Publisher<?>) this.invoker.invoke(invocationContext),
 							exchange.getRequest().getMethod()));
 		}
 
-		private String[] tokenizePathSegments(String path) {
-			String[] segments = StringUtils.tokenizeToStringArray(path, PATH_SEPARATOR, false, true);
-			for (int i = 0; i < segments.length; i++) {
-				if (segments[i].contains("%")) {
-					segments[i] = StringUtils.uriDecode(segments[i], StandardCharsets.UTF_8);
-				}
-			}
-			return segments;
-		}
-
 		private Map<String, Object> getArguments(ServerWebExchange exchange, Map<String, String> body) {
 			Map<String, Object> arguments = new LinkedHashMap<>(getTemplateVariables(exchange));
+			String matchAllRemainingPathSegmentsVariable = this.operation.getRequestPredicate()
+					.getMatchAllRemainingPathSegmentsVariable();
+			if (matchAllRemainingPathSegmentsVariable != null) {
+				arguments.put(matchAllRemainingPathSegmentsVariable, getRemainingPathSegments(exchange));
+			}
 			if (body != null) {
 				arguments.putAll(body);
 			}
 			exchange.getRequest().getQueryParams()
 					.forEach((name, values) -> arguments.put(name, (values.size() != 1) ? values : values.get(0)));
 			return arguments;
+		}
+
+		private Object getRemainingPathSegments(ServerWebExchange exchange) {
+			String[] pathTokens = tokenizePathSegments(
+					exchange.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE), true);
+			String[] patternTokens = tokenizePathSegments(getPatternString(exchange), false);
+			int numberOfRemainingPathSegments = pathTokens.length - patternTokens.length + 1;
+			Assert.state(numberOfRemainingPathSegments >= 0, "Unable to extract remaining path segments");
+			String[] remainingPathSegments = new String[numberOfRemainingPathSegments];
+			System.arraycopy(pathTokens, patternTokens.length - 1, remainingPathSegments, 0,
+					numberOfRemainingPathSegments);
+			return remainingPathSegments;
+		}
+
+		private String getPatternString(ServerWebExchange exchange) {
+			PathPattern pathPattern = exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+			return (pathPattern) != null ? pathPattern.getPatternString() : null;
+		}
+
+		private String[] tokenizePathSegments(String value, boolean decode) {
+			String[] segments = StringUtils.tokenizeToStringArray(value, PATH_SEPARATOR, false, true);
+			if (decode) {
+				for (int i = 0; i < segments.length; i++) {
+					if (segments[i].contains("%")) {
+						segments[i] = StringUtils.uriDecode(segments[i], StandardCharsets.UTF_8);
+					}
+				}
+			}
+			return segments;
 		}
 
 		private Map<String, String> getTemplateVariables(ServerWebExchange exchange) {

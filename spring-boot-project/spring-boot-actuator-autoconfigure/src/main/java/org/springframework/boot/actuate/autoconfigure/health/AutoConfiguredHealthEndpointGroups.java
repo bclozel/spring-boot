@@ -33,6 +33,7 @@ import org.springframework.beans.factory.annotation.BeanFactoryAnnotationUtils;
 import org.springframework.boot.actuate.autoconfigure.health.HealthEndpointProperties.Group;
 import org.springframework.boot.actuate.autoconfigure.health.HealthProperties.Show;
 import org.springframework.boot.actuate.autoconfigure.health.HealthProperties.Status;
+import org.springframework.boot.actuate.health.AdditionalHealthEndpointPath;
 import org.springframework.boot.actuate.health.HealthEndpointGroup;
 import org.springframework.boot.actuate.health.HealthEndpointGroups;
 import org.springframework.boot.actuate.health.HttpCodeStatusMapper;
@@ -107,8 +108,10 @@ class AutoConfiguredHealthEndpointGroups implements HealthEndpointGroups {
 						return defaultHttpCodeStatusMapper;
 					});
 			Predicate<String> members = new IncludeExcludeGroupMemberPredicate(group.getInclude(), group.getExclude());
+			AdditionalHealthEndpointPath additionalPath = (group.getAdditionalPath() != null)
+					? AdditionalHealthEndpointPath.from(group.getAdditionalPath()) : null;
 			groups.put(groupName, new AutoConfiguredHealthEndpointGroup(members, statusAggregator, httpCodeStatusMapper,
-					showComponents, showDetails, roles, group.getAdditionalPath()));
+					showComponents, showDetails, roles, additionalPath));
 		});
 		return Collections.unmodifiableMap(groups);
 	}

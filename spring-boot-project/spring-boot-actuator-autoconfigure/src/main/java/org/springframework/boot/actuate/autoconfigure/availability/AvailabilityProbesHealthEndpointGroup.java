@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.springframework.boot.actuate.endpoint.SecurityContext;
+import org.springframework.boot.actuate.health.AdditionalHealthEndpointPath;
 import org.springframework.boot.actuate.health.HealthEndpointGroup;
 import org.springframework.boot.actuate.health.HttpCodeStatusMapper;
 import org.springframework.boot.actuate.health.StatusAggregator;
@@ -35,9 +36,9 @@ class AvailabilityProbesHealthEndpointGroup implements HealthEndpointGroup {
 
 	private final Set<String> members;
 
-	private final String additionalPath;
+	private final AdditionalHealthEndpointPath additionalPath;
 
-	AvailabilityProbesHealthEndpointGroup(String additionalPath, String... members) {
+	AvailabilityProbesHealthEndpointGroup(AdditionalHealthEndpointPath additionalPath, String... members) {
 		this.members = new HashSet<>(Arrays.asList(members));
 		this.additionalPath = additionalPath;
 	}
@@ -68,7 +69,7 @@ class AvailabilityProbesHealthEndpointGroup implements HealthEndpointGroup {
 	}
 
 	@Override
-	public String getAdditionalPath() {
+	public AdditionalHealthEndpointPath getAdditionalPath() {
 		return this.additionalPath;
 	}
 

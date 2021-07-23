@@ -81,6 +81,12 @@ public class HealthEndpointProperties extends HealthProperties {
 		 */
 		private Show showDetails;
 
+		/**
+		 * Additional path that this group can be made available on. The additional path
+		 * must start with a valid prefix, either `server` or `management` to indicate if
+		 * it will be available on the main port or the management port. For instance,
+		 * `server:/healthz` will configure the group on the main port at `/healthz`.
+		 */
 		private String additionalPath;
 
 		public Set<String> getInclude() {

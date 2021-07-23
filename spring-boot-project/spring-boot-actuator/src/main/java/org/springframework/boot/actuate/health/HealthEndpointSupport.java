@@ -72,7 +72,7 @@ abstract class HealthEndpointSupport<C, T> {
 		if (serverNamespace == null) {
 			return null;
 		}
-		return this.groups.get(AdditionalHealthEndpointPath.of(serverNamespace, path));
+		return this.groups.get(AdditionalHealthEndpointPath.of(serverNamespace, path[0]));
 	}
 
 	private HealthResult<T> getHealth(ApiVersion apiVersion, HealthEndpointGroup group, SecurityContext securityContext,

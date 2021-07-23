@@ -39,10 +39,10 @@ import org.springframework.boot.actuate.endpoint.invoke.OperationInvoker;
 import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.EndpointMediaTypes;
 import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
-import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
 import org.springframework.boot.actuate.endpoint.web.WebOperationRequestPredicate;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -303,7 +303,7 @@ public abstract class AbstractWebMvcEndpointHandlerMapping extends RequestMappin
 							WebApplicationContext applicationContext = WebApplicationContextUtils
 									.getRequiredWebApplicationContext(request.getServletContext());
 							return WebServerNamespace
-									.of(WebServerApplicationContext.getServerNamepace(applicationContext));
+									.from(WebServerApplicationContext.getServerNamepace(applicationContext));
 						});
 				InvocationContext invocationContext = new InvocationContext(securityContext, arguments,
 						serverNamespaceArgumentResolver, producibleOperationArgumentResolver);

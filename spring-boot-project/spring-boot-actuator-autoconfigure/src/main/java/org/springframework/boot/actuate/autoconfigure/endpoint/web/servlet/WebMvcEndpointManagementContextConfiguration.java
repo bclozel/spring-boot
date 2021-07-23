@@ -20,14 +20,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.CorsEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.health.AdditionalHealthEndpointPathsWebMvcHandlerMapping;
 import org.springframework.boot.actuate.autoconfigure.web.ManagementContextConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.server.ConditionalOnManagementPort;
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
-import org.springframework.boot.actuate.endpoint.EndpointId;
 import org.springframework.boot.actuate.endpoint.ExposableEndpoint;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver;
@@ -68,8 +66,6 @@ import org.springframework.web.servlet.DispatcherServlet;
 @EnableConfigurationProperties(CorsEndpointProperties.class)
 public class WebMvcEndpointManagementContextConfiguration {
 
-	private static final EndpointId HEALTH_ENDPOINT_ID = EndpointId.of("health");
-
 	@Bean
 	@ConditionalOnMissingBean
 	public WebMvcEndpointHandlerMapping webEndpointServletHandlerMapping(WebEndpointsSupplier webEndpointsSupplier,
@@ -89,39 +85,22 @@ public class WebMvcEndpointManagementContextConfiguration {
 				shouldRegisterLinksMapping);
 	}
 
-	@Bean
-	@ConditionalOnManagementPort(ManagementPortType.DIFFERENT)
-	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class)
-	public AdditionalHealthEndpointPathsWebMvcHandlerMapping managementHealthEndpointWebMvcHandlerMapping(
-			WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups groups) {
-		return healthEndpointWebMvcHandlerMapping(webEndpointsSupplier, groups, WebServerNamespace.MANAGEMENT);
-	}
-
-	@Bean
-	@ConditionalOnManagementPort(ManagementPortType.SAME)
-	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class)
-	public AdditionalHealthEndpointPathsWebMvcHandlerMapping serverHealthEndpointWebMvcHandlerMapping(
-			WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups groups) {
-		return healthEndpointWebMvcHandlerMapping(webEndpointsSupplier, groups, WebServerNamespace.SERVER);
-	}
-
-	private AdditionalHealthEndpointPathsWebMvcHandlerMapping healthEndpointWebMvcHandlerMapping(
-			WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups groups,
-			WebServerNamespace webServerNamespace) {
-		Collection<ExposableWebEndpoint> webEndpoints = webEndpointsSupplier.getEndpoints();
-		ExposableWebEndpoint health = webEndpoints.stream().filter(this::isHealthEndpoint).findFirst().get();
-		return new AdditionalHealthEndpointPathsWebMvcHandlerMapping(health,
-				groups.getForAdditionalPathOnNamespace(webServerNamespace));
-	}
-
-	private boolean isHealthEndpoint(ExposableWebEndpoint endpoint) {
-		return endpoint.getEndpointId().equals(HEALTH_ENDPOINT_ID);
-	}
-
 	private boolean shouldRegisterLinksMapping(WebEndpointProperties webEndpointProperties, Environment environment,
 			String basePath) {
 		return webEndpointProperties.getDiscovery().isEnabled() && (StringUtils.hasText(basePath)
 				|| ManagementPortType.get(environment).equals(ManagementPortType.DIFFERENT));
+	}
+
+	@Bean
+	@ConditionalOnManagementPort(ManagementPortType.DIFFERENT)
+	@ConditionalOnBean(HealthEndpoint.class)
+	public AdditionalHealthEndpointPathsWebMvcHandlerMapping managementHealthEndpointWebMvcHandlerMapping(
+			WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups groups) {
+		Collection<ExposableWebEndpoint> webEndpoints = webEndpointsSupplier.getEndpoints();
+		ExposableWebEndpoint health = webEndpoints.stream()
+				.filter((endpoint) -> endpoint.getEndpointId().equals(HealthEndpoint.ID)).findFirst().get();
+		return new AdditionalHealthEndpointPathsWebMvcHandlerMapping(health,
+				groups.getForAdditionalPathOnNamespace(WebServerNamespace.MANAGEMENT));
 	}
 
 	@Bean

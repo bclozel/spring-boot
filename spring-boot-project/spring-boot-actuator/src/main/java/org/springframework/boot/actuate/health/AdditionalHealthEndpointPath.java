@@ -17,44 +17,129 @@
 package org.springframework.boot.actuate.health;
 
 import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 /**
+ * Value object that represents an additional path for a {@link HealthEndpointGroup}.
+ *
  * @author Phillip Webb
+ * @author Madhura Bhave
  * @since 2.6.0
  */
-public class AdditionalHealthEndpointPath {
+public final class AdditionalHealthEndpointPath {
 
-	/**
-	 * @return
-	 */
-	public String getPath() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Auto-generated method stub");
+	private final String value;
+
+	private final WebServerNamespace namespace;
+
+	private final String canonicalValue;
+
+	private AdditionalHealthEndpointPath(WebServerNamespace namespace, String value) {
+		this.namespace = namespace;
+		this.value = value;
+		this.canonicalValue = getCanonicalValue();
 	}
 
-	// FIXME thing to do the split / parse logic
-	// probably got ServerNamespace and String[] parts
-
-	/**
-	 * @param webServerNamespace
-	 * @param path
-	 * @return
-	 */
-	public static AdditionalHealthEndpointPath of(WebServerNamespace webServerNamespace, String[] path) {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Auto-generated method stub");
-	}
-
-	public static AdditionalHealthEndpointPath parse(String value) {
-		return null;
+	private String getCanonicalValue() {
+		if (this.value.startsWith("/")) {
+			return this.value;
+		}
+		return "/" + this.value;
 	}
 
 	/**
-	 * @param namespace
-	 * @return
+	 * Returns the value corresponding to this path.
+	 * @return the path
 	 */
-	public boolean hasNamespace(WebServerNamespace namespace) {
-		throw new UnsupportedOperationException("Auto-generated method stub");
+	public String getValue() {
+		return this.value;
+	}
+
+	/**
+	 * Returns the {@link WebServerNamespace} associated with this path.
+	 * @return the server namespace
+	 */
+	public WebServerNamespace getNamespace() {
+		return this.namespace;
+	}
+
+	/**
+	 * Creates an {@link AdditionalHealthEndpointPath} from the given input. The input
+	 * must contain a prefix and value separated by a `:`. The value must be limited to
+	 * one path segment. For example, `server:/healthz`.
+	 * @param value the value to parse
+	 * @return the new instance
+	 */
+	public static AdditionalHealthEndpointPath from(String value) {
+		Assert.hasText(value, "Value must not be null");
+		String[] values = value.split(":");
+		validate(values);
+		WebServerNamespace namespace = WebServerNamespace.from(values[0]);
+		return new AdditionalHealthEndpointPath(namespace, values[1]);
+	}
+
+	private static void validate(String[] values) {
+		if (values.length < 2) {
+			throw new IllegalArgumentException("Value must contain a valid namespace and value separated by ':'.");
+		}
+		if (!StringUtils.hasText(values[0])) {
+			throw new IllegalArgumentException("Value must contain a valid namespace.");
+		}
+		validateValue(values[1]);
+	}
+
+	private static void validateValue(String value) {
+		if (StringUtils.countOccurrencesOf(value, "/") > 1 || value.indexOf("/") > 0) {
+			throw new IllegalArgumentException("Value must contain only one segment.");
+		}
+	}
+
+	/**
+	 * Creates an {@link AdditionalHealthEndpointPath} from the given
+	 * {@link WebServerNamespace} and value.
+	 * @param webServerNamespace the server namespace
+	 * @param value the value
+	 * @return the new instance
+	 */
+	public static AdditionalHealthEndpointPath of(WebServerNamespace webServerNamespace, String value) {
+		Assert.notNull(webServerNamespace, "The server namespace must not be null.");
+		Assert.notNull(value, "The value must not be null.");
+		validateValue(value);
+		return new AdditionalHealthEndpointPath(webServerNamespace, value);
+	}
+
+	/**
+	 * Returns {@code true} if this path has the given {@link WebServerNamespace}.
+	 * @param webServerNamespace the server namespace
+	 * @return the new instance
+	 */
+	public boolean hasNamespace(WebServerNamespace webServerNamespace) {
+		return this.namespace.equals(webServerNamespace);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null || getClass() != obj.getClass()) {
+			return false;
+		}
+		AdditionalHealthEndpointPath other = (AdditionalHealthEndpointPath) obj;
+		boolean result = true;
+		result = result && this.namespace.equals(other.namespace);
+		result = result && this.canonicalValue.equals(other.canonicalValue);
+		return result;
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + this.namespace.hashCode();
+		result = prime * result + this.canonicalValue.hashCode();
+		return result;
 	}
 
 }

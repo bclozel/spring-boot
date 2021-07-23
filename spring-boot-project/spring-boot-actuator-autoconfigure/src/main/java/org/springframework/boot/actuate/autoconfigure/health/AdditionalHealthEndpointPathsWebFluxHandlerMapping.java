@@ -23,10 +23,12 @@ import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
 import org.springframework.boot.actuate.endpoint.web.WebOperationRequestPredicate;
-import org.springframework.boot.actuate.endpoint.web.servlet.AbstractWebMvcEndpointHandlerMapping;
-import org.springframework.boot.actuate.health.AdditionalHealthEndpointPath;
+import org.springframework.boot.actuate.endpoint.web.reactive.AbstractWebFluxEndpointHandlerMapping;
 import org.springframework.boot.actuate.health.HealthEndpointGroup;
-import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.reactive.HandlerMapping;
+import org.springframework.web.reactive.result.method.RequestMappingInfo;
 
 /**
  * A custom {@link HandlerMapping} that allows health groups to be mapped to an additional
@@ -35,17 +37,20 @@ import org.springframework.web.servlet.HandlerMapping;
  * @author Madhura Bhave
  * @since 2.6.0
  **/
-public class AdditionalHealthEndpointPathsWebMvcHandlerMapping extends AbstractWebMvcEndpointHandlerMapping {
+public class AdditionalHealthEndpointPathsWebFluxHandlerMapping extends AbstractWebFluxEndpointHandlerMapping {
+
+	private final EndpointMapping endpointMapping;
 
 	private final Set<HealthEndpointGroup> groups;
 
-	private ExposableWebEndpoint endpoint;
+	private final ExposableWebEndpoint endpoint;
 
-	public AdditionalHealthEndpointPathsWebMvcHandlerMapping(ExposableWebEndpoint endpoint,
-			Set<HealthEndpointGroup> groups) {
-		super(new EndpointMapping(""), Collections.singletonList(endpoint), null, false);
-		this.endpoint = endpoint;
+	public AdditionalHealthEndpointPathsWebFluxHandlerMapping(EndpointMapping endpointMapping,
+			ExposableWebEndpoint endpoint, Set<HealthEndpointGroup> groups) {
+		super(endpointMapping, Collections.singletonList(endpoint), null, null, false);
+		this.endpointMapping = endpointMapping;
 		this.groups = groups;
+		this.endpoint = endpoint;
 	}
 
 	@Override
@@ -55,11 +60,21 @@ public class AdditionalHealthEndpointPathsWebMvcHandlerMapping extends AbstractW
 			String matchAllRemainingPathSegmentsVariable = predicate.getMatchAllRemainingPathSegmentsVariable();
 			if (matchAllRemainingPathSegmentsVariable != null) {
 				for (HealthEndpointGroup group : this.groups) {
-					AdditionalHealthEndpointPath path = group.getAdditionalPath();
-					registerMapping(this.endpoint, predicate, operation, path.getValue());
+					RequestMappingInfo requestMappingInfo = getRequestMappingInfo(operation,
+							group.getAdditionalPath().getValue());
+					registerReadMapping(requestMappingInfo, this.endpoint, operation);
 				}
 			}
 		}
+	}
+
+	private RequestMappingInfo getRequestMappingInfo(WebOperation operation, String additionalPath) {
+		WebOperationRequestPredicate predicate = operation.getRequestPredicate();
+		String path = this.endpointMapping.createSubPath(additionalPath);
+		RequestMethod method = RequestMethod.valueOf(predicate.getHttpMethod().name());
+		String[] consumes = StringUtils.toStringArray(predicate.getConsumes());
+		String[] produces = StringUtils.toStringArray(predicate.getProduces());
+		return RequestMappingInfo.paths(path).methods(method).consumes(consumes).produces(produces).build();
 	}
 
 	@Override

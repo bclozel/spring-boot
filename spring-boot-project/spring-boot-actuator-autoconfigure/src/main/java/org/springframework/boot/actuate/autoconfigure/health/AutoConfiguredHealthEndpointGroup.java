@@ -22,6 +22,7 @@ import java.util.function.Predicate;
 
 import org.springframework.boot.actuate.autoconfigure.health.HealthProperties.Show;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
+import org.springframework.boot.actuate.health.AdditionalHealthEndpointPath;
 import org.springframework.boot.actuate.health.HealthEndpointGroup;
 import org.springframework.boot.actuate.health.HttpCodeStatusMapper;
 import org.springframework.boot.actuate.health.StatusAggregator;
@@ -51,7 +52,7 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 
 	private final Collection<String> roles;
 
-	private final String additionalPath;
+	private final AdditionalHealthEndpointPath additionalPath;
 
 	/**
 	 * Create a new {@link AutoConfiguredHealthEndpointGroup} instance.
@@ -65,7 +66,7 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 	 */
 	AutoConfiguredHealthEndpointGroup(Predicate<String> members, StatusAggregator statusAggregator,
 			HttpCodeStatusMapper httpCodeStatusMapper, Show showComponents, Show showDetails, Collection<String> roles,
-			String additionalPath) {
+			AdditionalHealthEndpointPath additionalPath) {
 		this.members = members;
 		this.statusAggregator = statusAggregator;
 		this.httpCodeStatusMapper = httpCodeStatusMapper;
@@ -147,7 +148,7 @@ class AutoConfiguredHealthEndpointGroup implements HealthEndpointGroup {
 	}
 
 	@Override
-	public String getAdditionalPath() {
+	public AdditionalHealthEndpointPath getAdditionalPath() {
 		return this.additionalPath;
 	}
 

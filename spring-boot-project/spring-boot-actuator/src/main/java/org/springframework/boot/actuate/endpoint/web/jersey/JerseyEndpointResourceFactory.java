@@ -24,8 +24,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import javax.ws.rs.HttpMethod;
@@ -42,6 +44,7 @@ import reactor.core.publisher.Mono;
 
 import org.springframework.boot.actuate.endpoint.InvalidEndpointRequestException;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
+import org.springframework.boot.actuate.endpoint.OperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.ProducibleOperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver;
@@ -52,6 +55,7 @@ import org.springframework.boot.actuate.endpoint.web.Link;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
 import org.springframework.boot.actuate.endpoint.web.WebOperationRequestPredicate;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.CollectionUtils;
@@ -91,7 +95,7 @@ public class JerseyEndpointResourceFactory {
 		return resources;
 	}
 
-	private Resource createResource(EndpointMapping endpointMapping, WebOperation operation) {
+	protected Resource createResource(EndpointMapping endpointMapping, WebOperation operation) {
 		WebOperationRequestPredicate requestPredicate = operation.getRequestPredicate();
 		String path = requestPredicate.getPath();
 		String matchAllRemainingPathSegmentsVariable = requestPredicate.getMatchAllRemainingPathSegmentsVariable();
@@ -99,11 +103,18 @@ public class JerseyEndpointResourceFactory {
 			path = path.replace("{*" + matchAllRemainingPathSegmentsVariable + "}",
 					"{" + matchAllRemainingPathSegmentsVariable + ": .*}");
 		}
-		Builder resourceBuilder = Resource.builder().path(endpointMapping.createSubPath(path));
+		return getResource(endpointMapping, operation, requestPredicate, path, null, null);
+	}
+
+	protected Resource getResource(EndpointMapping endpointMapping, WebOperation operation,
+			WebOperationRequestPredicate requestPredicate, String path, WebServerNamespace serverNamespace,
+			BiFunction<ContainerRequestContext, String, String> remainingPathSegments) {
+		Builder resourceBuilder = Resource.builder().path(endpointMapping.getPath())
+				.path(endpointMapping.createSubPath(path));
 		resourceBuilder.addMethod(requestPredicate.getHttpMethod().name())
 				.consumes(StringUtils.toStringArray(requestPredicate.getConsumes()))
-				.produces(StringUtils.toStringArray(requestPredicate.getProduces()))
-				.handledBy(new OperationInflector(operation, !requestPredicate.getConsumes().isEmpty()));
+				.produces(StringUtils.toStringArray(requestPredicate.getProduces())).handledBy(new OperationInflector(
+						operation, !requestPredicate.getConsumes().isEmpty(), serverNamespace, remainingPathSegments));
 		return resourceBuilder.build();
 	}
 
@@ -137,9 +148,17 @@ public class JerseyEndpointResourceFactory {
 
 		private final boolean readBody;
 
-		private OperationInflector(WebOperation operation, boolean readBody) {
+		private final WebServerNamespace serverNamespace;
+
+		private final BiFunction<ContainerRequestContext, String, String> remainingPathSegments;
+
+		private OperationInflector(WebOperation operation, boolean readBody, WebServerNamespace serverNamespace,
+				BiFunction<ContainerRequestContext, String, String> remainingPathSegments) {
 			this.operation = operation;
 			this.readBody = readBody;
+			this.serverNamespace = serverNamespace;
+			this.remainingPathSegments = (remainingPathSegments != null) ? remainingPathSegments
+					: this::getRemainingPathSegments;
 		}
 
 		@Override
@@ -152,7 +171,10 @@ public class JerseyEndpointResourceFactory {
 			arguments.putAll(extractQueryParameters(data));
 			try {
 				JerseySecurityContext securityContext = new JerseySecurityContext(data.getSecurityContext());
+				OperationArgumentResolver serverNamespaceArgumentResolver = OperationArgumentResolver
+						.of(WebServerNamespace.class, () -> this.serverNamespace);
 				InvocationContext invocationContext = new InvocationContext(securityContext, arguments,
+						serverNamespaceArgumentResolver,
 						new ProducibleOperationArgumentResolver(() -> data.getHeaders().get("Accept")));
 				Object response = this.operation.invoke(invocationContext);
 				return convertToJaxRsResponse(response, data.getRequest().getMethod());
@@ -169,14 +191,21 @@ public class JerseyEndpointResourceFactory {
 		}
 
 		private Map<String, Object> extractPathParameters(ContainerRequestContext requestContext) {
-			Map<String, Object> pathParameters = extract(requestContext.getUriInfo().getPathParameters());
+			Map<String, Object> pathParameters = new LinkedHashMap<>();
 			String matchAllRemainingPathSegmentsVariable = this.operation.getRequestPredicate()
 					.getMatchAllRemainingPathSegmentsVariable();
 			if (matchAllRemainingPathSegmentsVariable != null) {
-				String remainingPathSegments = (String) pathParameters.get(matchAllRemainingPathSegmentsVariable);
+				String remainingPathSegments = this.remainingPathSegments.apply(requestContext,
+						matchAllRemainingPathSegmentsVariable);
 				pathParameters.put(matchAllRemainingPathSegmentsVariable, tokenizePathSegments(remainingPathSegments));
 			}
 			return pathParameters;
+		}
+
+		private String getRemainingPathSegments(ContainerRequestContext data,
+				String matchAllRemainingPathSegmentsVariable) {
+			Map<String, Object> pathParameters = extract(data.getUriInfo().getPathParameters());
+			return (String) pathParameters.get(matchAllRemainingPathSegmentsVariable);
 		}
 
 		private String[] tokenizePathSegments(String path) {

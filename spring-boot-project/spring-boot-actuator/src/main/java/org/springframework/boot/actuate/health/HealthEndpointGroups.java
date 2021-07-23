@@ -16,6 +16,7 @@
 
 package org.springframework.boot.actuate.health;
 
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,7 +50,13 @@ public interface HealthEndpointGroups {
 	 */
 	HealthEndpointGroup get(String name);
 
-	// FIXME DC
+	/**
+	 * Return the group with the specified additional path or {@code null} if no group
+	 * with that path is found.
+	 * @param path the additional path
+	 * @return the matching {@link HealthEndpointGroup} or {@code null}
+	 * @since 2.6.0
+	 */
 	default HealthEndpointGroup get(AdditionalHealthEndpointPath path) {
 		Assert.notNull(path, "Path must not be null");
 		for (String name : getNames()) {
@@ -61,17 +68,20 @@ public interface HealthEndpointGroups {
 		return null;
 	}
 
+	/**
+	 * Return the groups with an additional path on the specified
+	 * {@link WebServerNamespace}.
+	 * @param namespace the {@link WebServerNamespace}
+	 * @return the matching groups
+	 * @since 2.6.0
+	 */
 	default Set<HealthEndpointGroup> getForAdditionalPathOnNamespace(WebServerNamespace namespace) {
 		Assert.notNull(namespace, "Namespace must not be null");
-		// FIXME
-		for (String name : getNames()) {
-			HealthEndpointGroup group = get(name);
-			AdditionalHealthEndpointPath additionalPath = group.getAdditionalPath();
-			if (additionalPath != null && additionalPath.hasNamespace(namespace)) {
-				return null;
-			}
-		}
-		return null;
+		Set<HealthEndpointGroup> filteredGroups = new LinkedHashSet<>();
+		getNames().stream().map(this::get).filter(
+				(group) -> group.getAdditionalPath() != null && group.getAdditionalPath().hasNamespace(namespace))
+				.forEach(filteredGroups::add);
+		return filteredGroups;
 	}
 
 	/**

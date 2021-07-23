@@ -22,6 +22,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.boot.actuate.health.AdditionalHealthEndpointPath;
 import org.springframework.boot.actuate.health.HealthEndpointGroup;
 import org.springframework.boot.actuate.health.HealthEndpointGroups;
 import org.springframework.util.Assert;
@@ -57,10 +59,11 @@ class AvailabilityProbesHealthEndpointGroups implements HealthEndpointGroups {
 		return Collections.unmodifiableMap(probeGroups);
 	}
 
-	private AvailabilityProbesHealthEndpointGroup createProbeGroup(boolean addAdditionalPath, String additionalPath,
-			String string2) {
-		additionalPath = (!addAdditionalPath) ? null : "server:" + additionalPath;
-		return new AvailabilityProbesHealthEndpointGroup(additionalPath, "livenessState");
+	private AvailabilityProbesHealthEndpointGroup createProbeGroup(boolean addAdditionalPath, String path,
+			String members) {
+		AdditionalHealthEndpointPath additionalPath = (!addAdditionalPath) ? null
+				: AdditionalHealthEndpointPath.of(WebServerNamespace.SERVER, path);
+		return new AvailabilityProbesHealthEndpointGroup(additionalPath, members);
 	}
 
 	@Override
