@@ -74,7 +74,6 @@ class HealthEndpointConfiguration {
 		return new AutoConfiguredHealthEndpointGroups(applicationContext, properties);
 	}
 
-
 	@Bean
 	@ConditionalOnMissingBean
 	HealthContributorRegistry healthContributorRegistry(ApplicationContext applicationContext,

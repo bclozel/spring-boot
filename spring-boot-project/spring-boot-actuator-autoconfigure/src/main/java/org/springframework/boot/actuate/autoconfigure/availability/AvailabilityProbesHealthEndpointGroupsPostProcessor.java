@@ -27,6 +27,7 @@ import org.springframework.core.env.Environment;
  * {@link AvailabilityProbesHealthEndpointGroups}.
  *
  * @author Phillip Webb
+ * @author Madhura Bhave
  */
 @Order(Ordered.LOWEST_PRECEDENCE)
 class AvailabilityProbesHealthEndpointGroupsPostProcessor implements HealthEndpointGroupsPostProcessor {

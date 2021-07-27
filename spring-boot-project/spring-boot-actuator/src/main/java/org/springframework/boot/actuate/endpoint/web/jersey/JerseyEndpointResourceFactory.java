@@ -24,10 +24,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import javax.ws.rs.HttpMethod;
@@ -108,13 +106,14 @@ public class JerseyEndpointResourceFactory {
 
 	protected Resource getResource(EndpointMapping endpointMapping, WebOperation operation,
 			WebOperationRequestPredicate requestPredicate, String path, WebServerNamespace serverNamespace,
-			BiFunction<ContainerRequestContext, String, String> remainingPathSegments) {
+			JerseyRemainingPathSegmentProvider remainingPathSegmentProvider) {
 		Builder resourceBuilder = Resource.builder().path(endpointMapping.getPath())
 				.path(endpointMapping.createSubPath(path));
 		resourceBuilder.addMethod(requestPredicate.getHttpMethod().name())
 				.consumes(StringUtils.toStringArray(requestPredicate.getConsumes()))
-				.produces(StringUtils.toStringArray(requestPredicate.getProduces())).handledBy(new OperationInflector(
-						operation, !requestPredicate.getConsumes().isEmpty(), serverNamespace, remainingPathSegments));
+				.produces(StringUtils.toStringArray(requestPredicate.getProduces()))
+				.handledBy(new OperationInflector(operation, !requestPredicate.getConsumes().isEmpty(), serverNamespace,
+						remainingPathSegmentProvider));
 		return resourceBuilder.build();
 	}
 
@@ -150,15 +149,14 @@ public class JerseyEndpointResourceFactory {
 
 		private final WebServerNamespace serverNamespace;
 
-		private final BiFunction<ContainerRequestContext, String, String> remainingPathSegments;
+		private final JerseyRemainingPathSegmentProvider remainingPathSegmentProvider;
 
 		private OperationInflector(WebOperation operation, boolean readBody, WebServerNamespace serverNamespace,
-				BiFunction<ContainerRequestContext, String, String> remainingPathSegments) {
+				JerseyRemainingPathSegmentProvider remainingPathSegments) {
 			this.operation = operation;
 			this.readBody = readBody;
 			this.serverNamespace = serverNamespace;
-			this.remainingPathSegments = (remainingPathSegments != null) ? remainingPathSegments
-					: this::getRemainingPathSegments;
+			this.remainingPathSegmentProvider = remainingPathSegments;
 		}
 
 		@Override
@@ -191,20 +189,22 @@ public class JerseyEndpointResourceFactory {
 		}
 
 		private Map<String, Object> extractPathParameters(ContainerRequestContext requestContext) {
-			Map<String, Object> pathParameters = new LinkedHashMap<>();
+			Map<String, Object> pathParameters = extract(requestContext.getUriInfo().getPathParameters());
 			String matchAllRemainingPathSegmentsVariable = this.operation.getRequestPredicate()
 					.getMatchAllRemainingPathSegmentsVariable();
 			if (matchAllRemainingPathSegmentsVariable != null) {
-				String remainingPathSegments = this.remainingPathSegments.apply(requestContext,
+				String remainingPathSegments = getRemainingPathSegments(requestContext, pathParameters,
 						matchAllRemainingPathSegmentsVariable);
 				pathParameters.put(matchAllRemainingPathSegmentsVariable, tokenizePathSegments(remainingPathSegments));
 			}
 			return pathParameters;
 		}
 
-		private String getRemainingPathSegments(ContainerRequestContext data,
-				String matchAllRemainingPathSegmentsVariable) {
-			Map<String, Object> pathParameters = extract(data.getUriInfo().getPathParameters());
+		private String getRemainingPathSegments(ContainerRequestContext requestContext,
+				Map<String, Object> pathParameters, String matchAllRemainingPathSegmentsVariable) {
+			if (this.remainingPathSegmentProvider != null) {
+				return this.remainingPathSegmentProvider.get(requestContext, matchAllRemainingPathSegmentsVariable);
+			}
 			return (String) pathParameters.get(matchAllRemainingPathSegmentsVariable);
 		}
 

@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfiguration;
+import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointAutoConfiguration;
 import org.springframework.boot.actuate.endpoint.ApiVersion;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
@@ -70,8 +72,10 @@ class HealthEndpointAutoConfigurationTests {
 					.of(HealthContributorAutoConfiguration.class, HealthEndpointAutoConfiguration.class));
 
 	private final ReactiveWebApplicationContextRunner reactiveContextRunner = new ReactiveWebApplicationContextRunner()
-			.withUserConfiguration(HealthIndicatorsConfiguration.class).withConfiguration(AutoConfigurations
-					.of(HealthContributorAutoConfiguration.class, HealthEndpointAutoConfiguration.class));
+			.withUserConfiguration(HealthIndicatorsConfiguration.class)
+			.withConfiguration(AutoConfigurations.of(HealthContributorAutoConfiguration.class,
+					HealthEndpointAutoConfiguration.class, WebEndpointAutoConfiguration.class,
+					EndpointAutoConfiguration.class));
 
 	@Test
 	void runWhenHealthEndpointIsDisabledDoesNotCreateBeans() {
@@ -232,7 +236,7 @@ class HealthEndpointAutoConfigurationTests {
 		this.reactiveContextRunner.run((context) -> {
 			ReactiveHealthEndpointWebExtension webExtension = context.getBean(ReactiveHealthEndpointWebExtension.class);
 			Mono<WebEndpointResponse<? extends HealthComponent>> response = webExtension.health(ApiVersion.V3,
-					SecurityContext.NONE, true, "simple");
+					WebServerNamespace.SERVER, SecurityContext.NONE, true, "simple");
 			Health health = (Health) (response.block().getBody());
 			assertThat(health.getDetails()).containsEntry("counter", 42);
 		});
@@ -245,7 +249,7 @@ class HealthEndpointAutoConfigurationTests {
 					ReactiveHealthEndpointWebExtension webExtension = context
 							.getBean(ReactiveHealthEndpointWebExtension.class);
 					Mono<WebEndpointResponse<? extends HealthComponent>> response = webExtension.health(ApiVersion.V3,
-							SecurityContext.NONE, true, "simple");
+							WebServerNamespace.SERVER, SecurityContext.NONE, true, "simple");
 					assertThat(response).isNull();
 				});
 	}

@@ -22,6 +22,7 @@ import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointsSupplier;
 import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.boot.actuate.endpoint.web.reactive.AdditionalHealthEndpointPathsWebFluxHandlerMapping;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.boot.actuate.health.HealthEndpointGroups;
 import org.springframework.boot.actuate.health.ReactiveHealthContributorRegistry;
@@ -57,7 +58,7 @@ class HealthEndpointReactiveWebExtensionConfiguration {
 	static class WebFluxAdditionalHealthEndpointPathsConfiguration {
 
 		@Bean
-		AdditionalHealthEndpointPathsWebFluxHandlerMapping healthEndpointWebMvcHandlerMapping(
+		AdditionalHealthEndpointPathsWebFluxHandlerMapping healthEndpointWebFluxHandlerMapping(
 				WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups groups) {
 			Collection<ExposableWebEndpoint> webEndpoints = webEndpointsSupplier.getEndpoints();
 			ExposableWebEndpoint health = webEndpoints.stream()

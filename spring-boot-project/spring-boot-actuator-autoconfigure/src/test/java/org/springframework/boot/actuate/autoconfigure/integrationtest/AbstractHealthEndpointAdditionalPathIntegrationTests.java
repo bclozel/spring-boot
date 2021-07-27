@@ -45,7 +45,8 @@ abstract class AbstractHealthEndpointAdditionalPathIntegrationTests<T extends Ab
 	void groupIsAvailableAtAdditionalPath() {
 		this.runner
 				.withPropertyValues("management.endpoint.health.group.live.include=diskSpace",
-						"management.endpoint.health.group.live.additional-path=server:/healthz")
+						"management.endpoint.health.group.live.additional-path=server:/healthz",
+						"management.endpoint.health.group.live.show-components=always")
 				.run(withWebTestClient(this::testResponse, "local.server.port"));
 	}
 
@@ -53,28 +54,31 @@ abstract class AbstractHealthEndpointAdditionalPathIntegrationTests<T extends Ab
 	void groupIsAvailableAtAdditionalPathWithoutSlash() {
 		this.runner
 				.withPropertyValues("management.endpoint.health.group.live.include=diskSpace",
-						"management.endpoint.health.group.live.additional-path=server:healthz")
+						"management.endpoint.health.group.live.additional-path=server:healthz",
+						"management.endpoint.health.group.live.show-components=always")
 				.run(withWebTestClient(this::testResponse, "local.server.port"));
 	}
 
 	@Test
 	void groupIsAvailableAtAdditionalPathOnManagementPort() {
 		this.runner.withPropertyValues("management.endpoint.health.group.live.include=diskSpace",
-				"management.server.port=0", "management.endpoint.health.group.live.additional-path=management:healthz")
+				"management.server.port=0", "management.endpoint.health.group.live.additional-path=management:healthz",
+				"management.endpoint.health.group.live.show-components=always")
 				.run(withWebTestClient(this::testResponse, "local.management.port"));
 	}
 
 	@Test
 	void groupIsAvailableAtAdditionalPathOnServerPortWithDifferentManagementPort() {
 		this.runner.withPropertyValues("management.endpoint.health.group.live.include=diskSpace",
-				"management.server.port=0", "management.endpoint.health.group.live.additional-path=server:healthz")
+				"management.server.port=0", "management.endpoint.health.group.live.additional-path=server:healthz",
+				"management.endpoint.health.group.live.show-components=always")
 				.withInitializer(new ConditionEvaluationReportLoggingListener())
 				.run(withWebTestClient(this::testResponse, "local.server.port"));
 	}
 
 	private void testResponse(WebTestClient client) {
 		client.get().uri("/healthz").accept(MediaType.APPLICATION_JSON).exchange().expectStatus().isOk().expectBody()
-				.jsonPath("$.status").isEqualTo("UP");
+				.jsonPath("status").isEqualTo("UP").jsonPath("components.diskSpace").exists();
 	}
 
 	private ContextConsumer<A> withWebTestClient(Consumer<WebTestClient> consumer, String property) {

@@ -142,4 +142,9 @@ public final class AdditionalHealthEndpointPath {
 		return result;
 	}
 
+	@Override
+	public String toString() {
+		return this.namespace.getValue() + ":" + this.value;
+	}
+
 }
