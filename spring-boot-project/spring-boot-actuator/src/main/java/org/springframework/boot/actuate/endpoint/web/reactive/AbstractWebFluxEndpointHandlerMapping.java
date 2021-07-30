@@ -17,7 +17,6 @@
 package org.springframework.boot.actuate.endpoint.web.reactive;
 
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.Collections;
@@ -54,7 +53,6 @@ import org.springframework.security.access.vote.RoleVoter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
-import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
@@ -339,32 +337,13 @@ public abstract class AbstractWebFluxEndpointHandlerMapping extends RequestMappi
 		}
 
 		private Object getRemainingPathSegments(ServerWebExchange exchange) {
-			String[] pathTokens = tokenizePathSegments(
-					exchange.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE), true);
-			String[] patternTokens = tokenizePathSegments(getPatternString(exchange), false);
-			int numberOfRemainingPathSegments = pathTokens.length - patternTokens.length + 1;
-			Assert.state(numberOfRemainingPathSegments >= 0, "Unable to extract remaining path segments");
-			String[] remainingPathSegments = new String[numberOfRemainingPathSegments];
-			System.arraycopy(pathTokens, patternTokens.length - 1, remainingPathSegments, 0,
-					numberOfRemainingPathSegments);
-			return remainingPathSegments;
-		}
-
-		private String getPatternString(ServerWebExchange exchange) {
 			PathPattern pathPattern = exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-			return (pathPattern) != null ? pathPattern.getPatternString() : null;
+			String remainingSegments = pathPattern.extractPathWithinPattern(exchange.getRequest().getPath().pathWithinApplication()).value();
+			return tokenizePathSegments(remainingSegments);
 		}
 
-		private String[] tokenizePathSegments(String value, boolean decode) {
-			String[] segments = StringUtils.tokenizeToStringArray(value, PATH_SEPARATOR, false, true);
-			if (decode) {
-				for (int i = 0; i < segments.length; i++) {
-					if (segments[i].contains("%")) {
-						segments[i] = StringUtils.uriDecode(segments[i], StandardCharsets.UTF_8);
-					}
-				}
-			}
-			return segments;
+		private String[] tokenizePathSegments(String value) {
+			return StringUtils.tokenizeToStringArray(value, PATH_SEPARATOR, false, true);
 		}
 
 		private Map<String, String> getTemplateVariables(ServerWebExchange exchange) {
