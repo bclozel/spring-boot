@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
@@ -55,7 +54,6 @@ import org.springframework.security.web.servletapi.SecurityContextHolderAwareReq
 import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.servlet.handler.RequestMatchResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -63,6 +61,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for web endpoints exposed using Spring MVC.
  *
  * @author Andy Wilkinson
+ * @author Brian Clozel
  * @see WebMvcEndpointHandlerMapping
  */
 class MvcWebEndpointIntegrationTests
@@ -104,31 +103,28 @@ class MvcWebEndpointIntegrationTests
 		});
 	}
 
-	@Test
-	void matchWhenRequestHasTrailingSlashShouldNotBeNull() {
-		assertThat(getMatchResult("/spring/")).isNotNull();
-	}
+	/*
+	 * @Test void matchWhenRequestHasTrailingSlashShouldNotBeNull() {
+	 * assertThat(getMatchResult("/spring/")).isNotNull(); }
+	 *
+	 * @Test void matchWhenRequestHasSuffixShouldBeNull() {
+	 * assertThat(getMatchResult("/spring.do")).isNull(); }
+	 *
+	 * private RequestMatchResult getMatchResult(String servletPath) {
+	 * MockHttpServletRequest request = new MockHttpServletRequest();
+	 * request.setServletPath(servletPath);
+	 * AnnotationConfigServletWebServerApplicationContext context =
+	 * createApplicationContext(); context.register(TestEndpointConfiguration.class);
+	 * context.refresh(); WebMvcEndpointHandlerMapping bean =
+	 * context.getBean(WebMvcEndpointHandlerMapping.class); try { // Trigger
+	 * initLookupPath bean.getHandler(request); } catch (Exception ex) { throw new
+	 * RuntimeException(ex); } return bean.match(request, "/spring"); }
+	 */
 
 	@Test
-	void matchWhenRequestHasSuffixShouldBeNull() {
-		assertThat(getMatchResult("/spring.do")).isNull();
-	}
-
-	private RequestMatchResult getMatchResult(String servletPath) {
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.setServletPath(servletPath);
-		AnnotationConfigServletWebServerApplicationContext context = createApplicationContext();
-		context.register(TestEndpointConfiguration.class);
-		context.refresh();
-		WebMvcEndpointHandlerMapping bean = context.getBean(WebMvcEndpointHandlerMapping.class);
-		try {
-			// Trigger initLookupPath
-			bean.getHandler(request);
-		}
-		catch (Exception ex) {
-			throw new RuntimeException(ex);
-		}
-		return bean.match(request, "/spring");
+	void readOperationsWithTrailingSlashShouldMatch() {
+		load(ResourceEndpointConfiguration.class, (client) -> client.get().uri("/resource/").exchange().expectStatus()
+				.isEqualTo(HttpStatus.OK).expectHeader().contentType(MediaType.APPLICATION_OCTET_STREAM));
 	}
 
 	@Override

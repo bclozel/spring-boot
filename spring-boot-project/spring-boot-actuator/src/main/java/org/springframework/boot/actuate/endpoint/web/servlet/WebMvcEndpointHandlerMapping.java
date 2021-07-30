@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,28 @@
 
 package org.springframework.boot.actuate.endpoint.web.servlet;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import org.springframework.boot.actuate.endpoint.ApiVersion;
 import org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver;
 import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.EndpointMediaTypes;
 import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.Link;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.ResourceHttpMessageConverter;
+import org.springframework.http.converter.ResourceRegionHttpMessageConverter;
+import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.function.ServerRequest;
+import org.springframework.web.servlet.function.ServerResponse;
 
 /**
  * A custom {@link HandlerMapping} that makes web endpoints available over HTTP using
@@ -38,9 +45,10 @@ import org.springframework.web.servlet.HandlerMapping;
  *
  * @author Andy Wilkinson
  * @author Phillip Webb
+ * @author Brian Clozel
  * @since 2.0.0
  */
-public class WebMvcEndpointHandlerMapping extends AbstractWebMvcEndpointHandlerMapping {
+public class WebMvcEndpointHandlerMapping extends AbstractWebMvcEndpointFunctionMapping {
 
 	private final EndpointLinksResolver linksResolver;
 
@@ -57,14 +65,17 @@ public class WebMvcEndpointHandlerMapping extends AbstractWebMvcEndpointHandlerM
 	public WebMvcEndpointHandlerMapping(EndpointMapping endpointMapping, Collection<ExposableWebEndpoint> endpoints,
 			EndpointMediaTypes endpointMediaTypes, CorsConfiguration corsConfiguration,
 			EndpointLinksResolver linksResolver, boolean shouldRegisterLinksMapping) {
-		super(endpointMapping, endpoints, endpointMediaTypes, corsConfiguration, shouldRegisterLinksMapping);
+		super(endpointMapping, endpoints, endpointMediaTypes, shouldRegisterLinksMapping, corsConfiguration);
+		// TODO configure message converters
+		setMessageConverters(Arrays.asList(new StringHttpMessageConverter(), new MappingJackson2HttpMessageConverter(),
+				new ResourceRegionHttpMessageConverter(), new ResourceHttpMessageConverter(),
+				new ByteArrayHttpMessageConverter()));
 		this.linksResolver = linksResolver;
-		setOrder(-100);
 	}
 
 	@Override
-	protected LinksHandler getLinksHandler() {
-		return new WebMvcLinksHandler();
+	protected LinksHandler getLinksHandler(EndpointMediaTypes endpointMediaTypes) {
+		return new WebMvcLinksHandler(endpointMediaTypes);
 	}
 
 	/**
@@ -72,16 +83,35 @@ public class WebMvcEndpointHandlerMapping extends AbstractWebMvcEndpointHandlerM
 	 */
 	class WebMvcLinksHandler implements LinksHandler {
 
-		@Override
-		@ResponseBody
-		public Map<String, Map<String, Link>> links(HttpServletRequest request, HttpServletResponse response) {
-			return Collections.singletonMap("_links",
-					WebMvcEndpointHandlerMapping.this.linksResolver.resolveLinks(request.getRequestURL().toString()));
+		private final MediaType DEFAULT_MEDIATYPE = MediaType
+				.parseMediaType(ApiVersion.LATEST.getProducedMimeType().toString());
+
+		private final MediaType[] supportedMediaTypes;
+
+		WebMvcLinksHandler(EndpointMediaTypes endpointMediaTypes) {
+			this.supportedMediaTypes = endpointMediaTypes.getProduced().stream().map(MediaType::parseMediaType)
+					.toArray(MediaType[]::new);
 		}
 
 		@Override
-		public String toString() {
-			return "Actuator root web endpoint";
+		public ServerResponse handle(ServerRequest request) throws Exception {
+			Map<String, Map<String, Link>> links = Collections.singletonMap("_links",
+					WebMvcEndpointHandlerMapping.this.linksResolver.resolveLinks(request.uri().toString()));
+			MediaType responseMediaType = selectResponseMediaType(request);
+			return ServerResponse.ok().contentType(responseMediaType).body(links);
+		}
+
+		private MediaType selectResponseMediaType(ServerRequest request) {
+			List<MediaType> accept = request.headers().accept();
+			accept.sort(MediaType.QUALITY_VALUE_COMPARATOR);
+			for (MediaType accepted : accept) {
+				for (MediaType supported : this.supportedMediaTypes) {
+					if (accepted.isCompatibleWith(supported)) {
+						return supported;
+					}
+				}
+			}
+			return this.DEFAULT_MEDIATYPE;
 		}
 
 	}
