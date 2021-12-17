@@ -41,7 +41,7 @@ import static org.mockito.Mockito.mock;
  *
  * @author Brian Clozel
  */
-class GraphQlWebMvcQueryByExampleAutoConfigurationTests {
+class GraphQlQueryByExampleAutoConfigurationTests {
 
 	private static final Book book = new Book("42", "Test title", 42, "Test Author");
 

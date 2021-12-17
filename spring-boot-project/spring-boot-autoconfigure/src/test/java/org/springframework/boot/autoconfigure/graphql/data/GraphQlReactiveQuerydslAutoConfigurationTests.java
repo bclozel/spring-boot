@@ -40,7 +40,7 @@ import static org.mockito.Mockito.mock;
  *
  * @author Brian Clozel
  */
-class GraphQlWebFluxQuerydslAutoConfigurationTests {
+class GraphQlReactiveQuerydslAutoConfigurationTests {
 
 	private static final Mono<Book> bookPublisher = Mono.just(new Book("42", "Test title", 42, "Test Author"));
 
