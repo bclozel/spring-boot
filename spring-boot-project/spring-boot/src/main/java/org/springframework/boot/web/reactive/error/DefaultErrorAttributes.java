@@ -18,6 +18,7 @@ package org.springframework.boot.web.reactive.error;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.URI;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,6 +31,7 @@ import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.core.annotation.MergedAnnotations.SearchStrategy;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
@@ -149,6 +151,94 @@ public class DefaultErrorAttributes implements ErrorAttributes {
 		errorAttributes.put("message",
 				"Validation failed for method='" + result.getMethod() + "'. Error count: " + errors.size());
 		errorAttributes.put("errors", errors);
+	}
+
+	@Override
+	public ProblemDetail asProblemDetail(ServerRequest request, ErrorAttributeOptions options) {
+		ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+		problemDetail.setTitle("None");
+		if (options.isIncluded(Include.PATH)) {
+			problemDetail.setInstance(URI.create(request.requestPath().value()));
+		}
+		problemDetail.setProperty("timestamp", new Date());
+		Throwable error = getError(request);
+		MergedAnnotation<ResponseStatus> responseStatusAnnotation = MergedAnnotations
+			.from(error.getClass(), SearchStrategy.TYPE_HIERARCHY)
+			.get(ResponseStatus.class);
+		HttpStatus errorStatus = determineHttpStatus(error, responseStatusAnnotation);
+		if (options.isIncluded(Include.STATUS)) {
+			problemDetail.setStatus(errorStatus);
+		}
+		if (options.isIncluded(Include.ERROR)) {
+			problemDetail.setTitle(errorStatus.getReasonPhrase());
+		}
+		problemDetail.setProperty("requestId", request.exchange().getRequest().getId());
+		handleException(problemDetail, error, responseStatusAnnotation, options);
+		return problemDetail;
+	}
+
+	private void handleException(ProblemDetail problemDetail, Throwable error,
+			MergedAnnotation<ResponseStatus> responseStatusAnnotation, ErrorAttributeOptions options) {
+		Throwable exception;
+		if (error instanceof BindingResult bindingResult) {
+			if (options.isIncluded(Include.MESSAGE)) {
+				problemDetail.setDetail(error.getMessage());
+			}
+			if (options.isIncluded(Include.BINDING_ERRORS)) {
+				problemDetail.setProperty("errors", bindingResult.getAllErrors());
+			}
+			exception = error;
+		}
+		else if (error instanceof MethodValidationResult methodValidationResult) {
+			addMessageAndErrorsFromMethodValidationResult(problemDetail, methodValidationResult, options);
+			exception = error;
+		}
+		else if (error instanceof ResponseStatusException responseStatusException) {
+			if (options.isIncluded(Include.MESSAGE)) {
+				problemDetail.setDetail(responseStatusException.getReason());
+			}
+			exception = (responseStatusException.getCause() != null) ? responseStatusException.getCause() : error;
+			if (options.isIncluded(Include.BINDING_ERRORS)) {
+				if (exception instanceof BindingResult bindingResult) {
+					problemDetail.setProperty("errors", bindingResult.getAllErrors());
+				}
+			}
+		}
+		else {
+			exception = error;
+			String reason = responseStatusAnnotation.getValue("reason", String.class).orElse("");
+			if (options.isIncluded(Include.MESSAGE)) {
+				String message = StringUtils.hasText(reason) ? reason : error.getMessage();
+				if (message != null) {
+					problemDetail.setDetail(message);
+				}
+			}
+		}
+		if (options.isIncluded(Include.EXCEPTION)) {
+			problemDetail.setProperty("exception", exception.getClass().getName());
+		}
+		if (options.isIncluded(Include.STACK_TRACE)) {
+			StringWriter stackTrace = new StringWriter();
+			error.printStackTrace(new PrintWriter(stackTrace));
+			stackTrace.flush();
+			problemDetail.setProperty("trace", stackTrace.toString());
+		}
+	}
+
+	private void addMessageAndErrorsFromMethodValidationResult(ProblemDetail problemDetail,
+			MethodValidationResult result, ErrorAttributeOptions options) {
+		List<ObjectError> errors = result.getAllErrors()
+			.stream()
+			.filter(ObjectError.class::isInstance)
+			.map(ObjectError.class::cast)
+			.toList();
+		if (options.isIncluded(Include.MESSAGE)) {
+			problemDetail
+				.setDetail("Validation failed for method='" + result.getMethod() + "'. Error count: " + errors.size());
+		}
+		if (options.isIncluded(Include.BINDING_ERRORS)) {
+			problemDetail.setProperty("errors", errors);
+		}
 	}
 
 	@Override

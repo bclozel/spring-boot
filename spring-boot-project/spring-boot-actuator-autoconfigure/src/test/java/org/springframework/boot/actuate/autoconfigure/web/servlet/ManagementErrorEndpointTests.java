@@ -18,6 +18,7 @@ package org.springframework.boot.actuate.autoconfigure.web.servlet;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.springframework.boot.web.servlet.error.ErrorAttributes;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.function.ServerRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
@@ -114,6 +116,11 @@ class ManagementErrorEndpointTests {
 			@Override
 			public Map<String, Object> getErrorAttributes(WebRequest webRequest, ErrorAttributeOptions options) {
 				return Collections.singletonMap("message", "An error occurred");
+			}
+
+			@Override
+			public Optional<Throwable> getError(ServerRequest request) {
+				return Optional.empty();
 			}
 
 			@Override

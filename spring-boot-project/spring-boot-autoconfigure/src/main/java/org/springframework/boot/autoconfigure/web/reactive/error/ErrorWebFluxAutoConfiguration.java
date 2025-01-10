@@ -21,6 +21,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.SearchStrategy;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
@@ -59,11 +60,28 @@ public class ErrorWebFluxAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean(value = ErrorWebExceptionHandler.class, search = SearchStrategy.CURRENT)
+	@ConditionalOnProperty(prefix = "spring.webflux.problemdetails", name = "enabled", havingValue = "false",
+			matchIfMissing = true)
 	@Order(-1)
-	public ErrorWebExceptionHandler errorWebExceptionHandler(ErrorAttributes errorAttributes,
+	public DefaultErrorWebExceptionHandler errorWebExceptionHandler(ErrorAttributes errorAttributes,
 			WebProperties webProperties, ObjectProvider<ViewResolver> viewResolvers,
 			ServerCodecConfigurer serverCodecConfigurer, ApplicationContext applicationContext) {
 		DefaultErrorWebExceptionHandler exceptionHandler = new DefaultErrorWebExceptionHandler(errorAttributes,
+				webProperties.getResources(), this.serverProperties.getError(), applicationContext);
+		exceptionHandler.setViewResolvers(viewResolvers.orderedStream().toList());
+		exceptionHandler.setMessageWriters(serverCodecConfigurer.getWriters());
+		exceptionHandler.setMessageReaders(serverCodecConfigurer.getReaders());
+		return exceptionHandler;
+	}
+
+	@Bean
+	@ConditionalOnMissingBean(value = ErrorWebExceptionHandler.class, search = SearchStrategy.CURRENT)
+	@ConditionalOnProperty(prefix = "spring.webflux.problemdetails", name = "enabled", havingValue = "true")
+	@Order(-1)
+	public ProblemDetailsErrorWebExceptionHandler problemDetailsErrorWebExceptionHandler(ErrorAttributes errorAttributes,
+			WebProperties webProperties, ObjectProvider<ViewResolver> viewResolvers,
+			ServerCodecConfigurer serverCodecConfigurer, ApplicationContext applicationContext) {
+		ProblemDetailsErrorWebExceptionHandler exceptionHandler = new ProblemDetailsErrorWebExceptionHandler(errorAttributes,
 				webProperties.getResources(), this.serverProperties.getError(), applicationContext);
 		exceptionHandler.setViewResolvers(viewResolvers.orderedStream().toList());
 		exceptionHandler.setMessageWriters(serverCodecConfigurer.getWriters());

@@ -16,6 +16,7 @@
 
 package org.springframework.boot.autoconfigure.web.servlet.error;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -64,10 +65,16 @@ import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.View;
+import org.springframework.web.servlet.function.RequestPredicates;
+import org.springframework.web.servlet.function.RouterFunction;
+import org.springframework.web.servlet.function.RouterFunctions;
+import org.springframework.web.servlet.function.ServerResponse;
 import org.springframework.web.servlet.view.BeanNameViewResolver;
 import org.springframework.web.util.HtmlUtils;
 
@@ -102,11 +109,32 @@ public class ErrorMvcAutoConfiguration {
 	}
 
 	@Bean
+	@ConditionalOnProperty(prefix = "spring.mvc.problemdetails", name = "enabled", havingValue = "false",
+			matchIfMissing = true)
 	@ConditionalOnMissingBean(value = ErrorController.class, search = SearchStrategy.CURRENT)
 	public BasicErrorController basicErrorController(ErrorAttributes errorAttributes,
 			ObjectProvider<ErrorViewResolver> errorViewResolvers) {
 		return new BasicErrorController(errorAttributes, this.serverProperties.getError(),
 				errorViewResolvers.orderedStream().toList());
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = "spring.mvc.problemdetails", name = "enabled", havingValue = "true")
+	@ConditionalOnMissingBean(value = RouterFunction.class, name = "errorRouterFunction",
+			search = SearchStrategy.CURRENT)
+	@Order(Ordered.LOWEST_PRECEDENCE)
+	public RouterFunction<ServerResponse> errorRouterFunction(ErrorAttributes errorAttributes,
+			ObjectProvider<ErrorViewResolver> errorViewResolvers) {
+		BasicErrorHandlerFunctions handlerFunctions = new BasicErrorHandlerFunctions(errorAttributes,
+				this.serverProperties.getError(), errorViewResolvers.orderedStream().toList());
+		return RouterFunctions.nest(RequestPredicates.path(this.serverProperties.getError().getPath()),
+				RouterFunctions.route(handlerFunctions.isNoContentStatus(), handlerFunctions::handleErrorNoContent)
+					.andRoute(RequestPredicates.accept(MediaType.APPLICATION_PROBLEM_JSON),
+							handlerFunctions.createProblemDetailErrorHandler(MediaType.APPLICATION_PROBLEM_JSON))
+					.andRoute(RequestPredicates.accept(MediaType.APPLICATION_PROBLEM_XML),
+							handlerFunctions.createProblemDetailErrorHandler(MediaType.APPLICATION_PROBLEM_XML))
+					.andRoute(RequestPredicates.accept(MediaType.TEXT_HTML), handlerFunctions::handleErrorHtml)
+					.andRoute(RequestPredicates.all(), (request) -> ServerResponse.badRequest().build()));
 	}
 
 	@Bean
@@ -146,12 +174,19 @@ public class ErrorMvcAutoConfiguration {
 	@Conditional(ErrorTemplateMissingCondition.class)
 	protected static class WhitelabelErrorViewConfiguration {
 
-		private final StaticView defaultErrorView = new StaticView();
-
 		@Bean(name = "error")
+		@ConditionalOnProperty(prefix = "spring.mvc.problemdetails", name = "enabled", havingValue = "false",
+				matchIfMissing = true)
 		@ConditionalOnMissingBean(name = "error")
 		public View defaultErrorView() {
-			return this.defaultErrorView;
+			return new StaticView();
+		}
+
+		@Bean(name = "error")
+		@ConditionalOnProperty(prefix = "spring.mvc.problemdetails", name = "enabled", havingValue = "true")
+		@ConditionalOnMissingBean(name = "error")
+		public View problemDetailErrorView() {
+			return new ProblemDetailView();
 		}
 
 		// If the user adds @EnableWebMvc then the bean name view resolver from
@@ -239,6 +274,77 @@ public class ErrorMvcAutoConfiguration {
 			String message = "Cannot render error page for request [" + path + "]";
 			if (model.get("message") != null) {
 				message += " and exception [" + model.get("message") + "]";
+			}
+			message += " as the response has already been committed.";
+			message += " As a result, the response may have the wrong status code.";
+			return message;
+		}
+
+		@Override
+		public String getContentType() {
+			return "text/html";
+		}
+
+	}
+
+	/**
+	 * ProblemDetail {@link View} implementation that writes a default HTML error page.
+	 */
+	private static final class ProblemDetailView implements View {
+
+		private static final MediaType TEXT_HTML_UTF8 = new MediaType("text", "html", StandardCharsets.UTF_8);
+
+		private static final Log logger = LogFactory.getLog(StaticView.class);
+
+		@Override
+		public void render(Map<String, ?> model, HttpServletRequest request, HttpServletResponse response)
+				throws Exception {
+
+			ProblemDetail problemDetail = (ProblemDetail) model.get("problem");
+			Map<String, Object> properties = problemDetail.getProperties();
+			if (response.isCommitted()) {
+				String message = getMessage(problemDetail);
+				logger.error(message);
+				return;
+			}
+			response.setContentType(TEXT_HTML_UTF8.toString());
+			StringBuilder builder = new StringBuilder();
+			Object timestamp = properties.get("timestamp");
+			Object message = problemDetail.getDetail();
+			Object trace = properties.get("trace");
+			if (response.getContentType() == null) {
+				response.setContentType(getContentType());
+			}
+			builder.append("<html><body><h1>Whitelabel Error Page</h1>")
+				.append("<p>This application has no explicit mapping for /error, so you are seeing this as a fallback.</p>")
+				.append("<div id='created'>")
+				.append(timestamp)
+				.append("</div>")
+				.append("<div>There was an unexpected error (type=")
+				.append(htmlEscape(problemDetail.getTitle()))
+				.append(", status=")
+				.append(htmlEscape(problemDetail.getStatus()))
+				.append(").</div>");
+			if (message != null) {
+				builder.append("<div>").append(htmlEscape(message)).append("</div>");
+			}
+			if (trace != null) {
+				builder.append("<div style='white-space:pre-wrap;'>").append(htmlEscape(trace)).append("</div>");
+			}
+			builder.append("</body></html>");
+			response.getWriter().append(builder.toString());
+		}
+
+		private String htmlEscape(Object input) {
+			return (input != null) ? HtmlUtils.htmlEscape(input.toString()) : null;
+		}
+
+		private String getMessage(ProblemDetail problemDetail) {
+			URI path = problemDetail.getInstance();
+			String message = "Cannot render error page for request [" + path + "]";
+			String detail = problemDetail.getDetail();
+			if (detail != null) {
+				message += " and exception [" + detail + "]";
 			}
 			message += " as the response has already been committed.";
 			message += " As a result, the response may have the wrong status code.";

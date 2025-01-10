@@ -18,10 +18,12 @@ package org.springframework.boot.web.servlet.error;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.URI;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
@@ -33,15 +35,19 @@ import org.springframework.boot.web.error.ErrorAttributeOptions.Include;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
 import org.springframework.validation.method.MethodValidationResult;
 import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.function.ServerRequest;
 
 /**
  * Default implementation of {@link ErrorAttributes}. Provides the following attributes
@@ -65,6 +71,7 @@ import org.springframework.web.servlet.ModelAndView;
  * @author Scott Frederick
  * @author Moritz Halbritter
  * @author Yanming Zhou
+ * @author Brian Clozel
  * @since 2.0.0
  * @see ErrorAttributes
  */
@@ -232,6 +239,110 @@ public class DefaultErrorAttributes implements ErrorAttributes, HandlerException
 	}
 
 	@Override
+	public ProblemDetail asProblemDetail(ServerRequest request, ErrorAttributeOptions options) {
+		ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+		problemDetail.setTitle("None");
+		problemDetail.setProperty("timestamp", new Date());
+		addStatus(problemDetail, request, options);
+		addErrorDetails(problemDetail, request, options);
+		if (options.isIncluded(Include.PATH)) {
+			addPath(problemDetail, request);
+		}
+		return problemDetail;
+	}
+
+	private void addStatus(ProblemDetail problemDetail, ServerRequest request, ErrorAttributeOptions options) {
+		Optional<Integer> status = getAttribute(request, RequestDispatcher.ERROR_STATUS_CODE);
+		if (status.isPresent()) {
+			HttpStatusCode statusCode = HttpStatusCode.valueOf(status.get());
+			if (options.isIncluded(Include.STATUS)) {
+				problemDetail.setStatus(statusCode.value());
+			}
+			if (options.isIncluded(Include.ERROR)) {
+				if (statusCode instanceof HttpStatus httpStatus) {
+					problemDetail.setTitle(httpStatus.getReasonPhrase());
+				}
+				else {
+					problemDetail.setTitle("Http Status " + statusCode.value());
+				}
+			}
+		}
+	}
+
+	private void addErrorDetails(ProblemDetail problemDetail, ServerRequest request, ErrorAttributeOptions options) {
+		Throwable error = getError(request).orElse(null);
+		if (error != null) {
+			while (error instanceof ServletException && error.getCause() != null) {
+				error = error.getCause();
+			}
+			if (options.isIncluded(Include.EXCEPTION)) {
+				problemDetail.setProperty("exception", error.getClass().getName());
+			}
+			if (options.isIncluded(Include.STACK_TRACE)) {
+				addStackTrace(problemDetail, error);
+			}
+		}
+		addErrorMessage(problemDetail, request, error, options);
+	}
+
+	private void addStackTrace(ProblemDetail problemDetail, Throwable error) {
+		StringWriter stackTrace = new StringWriter();
+		error.printStackTrace(new PrintWriter(stackTrace));
+		stackTrace.flush();
+		problemDetail.setProperty("trace", stackTrace.toString());
+	}
+
+	private void addErrorMessage(ProblemDetail problemDetail, ServerRequest request, Throwable error,
+			ErrorAttributeOptions options) {
+		BindingResult bindingResult = extractBindingResult(error);
+		if (bindingResult != null) {
+			addMessageAndErrorsFromBindingResult(problemDetail, bindingResult, options);
+		}
+		else {
+			MethodValidationResult methodValidationResult = extractMethodValidationResult(error);
+			if (methodValidationResult != null) {
+				addMessageAndErrorsFromMethodValidationResult(problemDetail, methodValidationResult, options);
+			}
+			else {
+				if (options.isIncluded(Include.MESSAGE)) {
+					problemDetail.setDetail(getMessage(new ServletWebRequest(request.servletRequest()), error));
+				}
+			}
+		}
+	}
+
+	private void addMessageAndErrorsFromBindingResult(ProblemDetail problemDetail, BindingResult result,
+			ErrorAttributeOptions options) {
+		addMessageAndErrorsForValidationFailure(problemDetail, "object='" + result.getObjectName() + "'",
+				result.getAllErrors(), options);
+	}
+
+	private void addMessageAndErrorsFromMethodValidationResult(ProblemDetail problemDetail,
+			MethodValidationResult result, ErrorAttributeOptions options) {
+		List<ObjectError> errors = result.getAllErrors()
+			.stream()
+			.filter(ObjectError.class::isInstance)
+			.map(ObjectError.class::cast)
+			.toList();
+		addMessageAndErrorsForValidationFailure(problemDetail, "method='" + result.getMethod() + "'", errors, options);
+	}
+
+	private void addMessageAndErrorsForValidationFailure(ProblemDetail problemDetail, String validated,
+			List<ObjectError> errors, ErrorAttributeOptions options) {
+		if (options.isIncluded(Include.MESSAGE)) {
+			problemDetail.setDetail("Validation failed for " + validated + ". Error count: " + errors.size());
+		}
+		if (options.isIncluded(Include.BINDING_ERRORS)) {
+			problemDetail.setProperty("errors", errors);
+		}
+	}
+
+	private void addPath(ProblemDetail problemDetail, ServerRequest request) {
+		Optional<String> path = getAttribute(request, RequestDispatcher.ERROR_REQUEST_URI);
+		path.ifPresent((p) -> problemDetail.setInstance(URI.create(p)));
+	}
+
+	@Override
 	public Throwable getError(WebRequest webRequest) {
 		Throwable exception = getAttribute(webRequest, ERROR_INTERNAL_ATTRIBUTE);
 		if (exception == null) {
@@ -240,9 +351,23 @@ public class DefaultErrorAttributes implements ErrorAttributes, HandlerException
 		return exception;
 	}
 
+	@Override
+	public Optional<Throwable> getError(ServerRequest request) {
+		Optional<Throwable> exception = getAttribute(request, ERROR_INTERNAL_ATTRIBUTE);
+		if (exception.isPresent()) {
+			return exception;
+		}
+		return getAttribute(request, RequestDispatcher.ERROR_EXCEPTION);
+	}
+
 	@SuppressWarnings("unchecked")
 	private <T> T getAttribute(RequestAttributes requestAttributes, String name) {
 		return (T) requestAttributes.getAttribute(name, RequestAttributes.SCOPE_REQUEST);
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> Optional<T> getAttribute(ServerRequest request, String name) {
+		return (Optional<T>) request.attribute(name);
 	}
 
 }

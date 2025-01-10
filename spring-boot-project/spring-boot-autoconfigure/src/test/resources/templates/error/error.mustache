@@ -1,8 +1,14 @@
 <html>
 <body>
 <ul>
-	<li>status: {{status}}</li>
-	<li>message: {{message}}</li>
+	{{#problem}}
+		<li>status: {{problem.status}}</li>
+		<li>message: {{problem.detail}}</li>
+	{{/problem}}
+	{{^problem}}
+    	<li>status: {{status}}</li>
+		<li>message: {{message}}</li>
+	{{/problem}}
 </ul>
 </body>
 </html>

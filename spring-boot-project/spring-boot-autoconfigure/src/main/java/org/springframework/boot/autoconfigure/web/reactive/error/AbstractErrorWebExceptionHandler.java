@@ -35,6 +35,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.log.LogMessage;
 import org.springframework.http.HttpLogging;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.codec.HttpMessageReader;
 import org.springframework.http.codec.HttpMessageWriter;
 import org.springframework.util.Assert;
@@ -132,6 +133,17 @@ public abstract class AbstractErrorWebExceptionHandler implements ErrorWebExcept
 	}
 
 	/**
+	 * Extract the error data as a {@link ProblemDetail} from the current request,
+	 * to be used to populate error views or JSON payloads.
+	 * @param request the source request
+	 * @param options options to control error attributes
+	 * @return the error attributes as a Map
+	 */
+	protected ProblemDetail getProblemDetail(ServerRequest request, ErrorAttributeOptions options) {
+		return this.errorAttributes.asProblemDetail(request, options);
+	}
+
+	/**
 	 * Extract the original error from the current request.
 	 * @param request the source request
 	 * @return the error
@@ -206,6 +218,27 @@ public abstract class AbstractErrorWebExceptionHandler implements ErrorWebExcept
 		return Mono.empty();
 	}
 
+	/**
+	 * Render the given error data as a view, using a template view if available or a
+	 * static HTML file if available otherwise. This will return an empty
+	 * {@code Publisher} if none of the above are available.
+	 * @param viewName the view name
+	 * @param responseBody the error response being built
+	 * @param problemDetail the error as a problem detail
+	 * @return a Publisher of the {@link ServerResponse}
+	 */
+	protected Mono<ServerResponse> renderErrorView(String viewName, ServerResponse.BodyBuilder responseBody,
+			ProblemDetail problemDetail) {
+		if (isTemplateAvailable(viewName)) {
+			return responseBody.render(viewName, Map.of("problem", problemDetail));
+		}
+		Resource resource = resolveResource(viewName);
+		if (resource != null) {
+			return responseBody.body(BodyInserters.fromResource(resource));
+		}
+		return Mono.empty();
+	}
+
 	private boolean isTemplateAvailable(String viewName) {
 		return this.templateAvailabilityProviders.getProvider(viewName, this.applicationContext) != null;
 	}
@@ -253,6 +286,44 @@ public abstract class AbstractErrorWebExceptionHandler implements ErrorWebExcept
 			.append(", status=")
 			.append(htmlEscape(error.get("status")))
 			.append(").</div>");
+		if (message != null) {
+			builder.append("<div>").append(htmlEscape(message)).append("</div>");
+		}
+		if (trace != null) {
+			builder.append("<div style='white-space:pre-wrap;'>").append(htmlEscape(trace)).append("</div>");
+		}
+		builder.append("</body></html>");
+		return responseBody.bodyValue(builder.toString());
+	}
+
+	/**
+	 * Render a default HTML "Whitelabel Error Page".
+	 * <p>
+	 * Useful when no other error view is available in the application.
+	 * @param responseBody the error response being built
+	 * @param problemDetail the error data as problem detail
+	 * @return a Publisher of the {@link ServerResponse}
+	 * @since 3.5.0
+	 */
+	protected Mono<ServerResponse> renderDefaultErrorView(ServerResponse.BodyBuilder responseBody,
+			ProblemDetail problemDetail) {
+		StringBuilder builder = new StringBuilder();
+		Date timestamp = (Date) problemDetail.getProperties().get("timestamp");
+		Object message = problemDetail.getDetail();
+		Object trace = problemDetail.getProperties().get("trace");
+		Object requestId = problemDetail.getProperties().get("requestId");
+		builder.append("<html><body><h1>Whitelabel Error Page</h1>")
+				.append("<p>This application has no configured error view, so you are seeing this as a fallback.</p>")
+				.append("<div id='created'>")
+				.append(timestamp)
+				.append("</div>")
+				.append("<div>[")
+				.append(requestId)
+				.append("] There was an unexpected error (type=")
+				.append(htmlEscape(problemDetail.getTitle()))
+				.append(", status=")
+				.append(htmlEscape(problemDetail.getStatus()))
+				.append(").</div>");
 		if (message != null) {
 			builder.append("<div>").append(htmlEscape(message)).append("</div>");
 		}

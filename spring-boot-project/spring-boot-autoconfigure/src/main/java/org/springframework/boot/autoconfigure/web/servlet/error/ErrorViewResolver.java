@@ -21,6 +21,7 @@ import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.servlet.ModelAndView;
 
 /**
@@ -39,6 +40,20 @@ public interface ErrorViewResolver {
 	 * @param model the suggested model to be used with the view
 	 * @return a resolved {@link ModelAndView} or {@code null}
 	 */
+	// TODO: deprecated
 	ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status, Map<String, Object> model);
+
+	/**
+	 * Resolve an error view for the specified details.
+	 * @param request the source request
+	 * @param status the http status code of the error
+	 * @param model the suggested model to be used with the view
+	 * @return a resolved {@link ModelAndView} or {@code null}
+	 */
+	default ModelAndView resolveErrorView(HttpServletRequest request, HttpStatusCode status,
+			Map<String, Object> model) {
+		HttpStatus resolved = HttpStatus.resolve(status.value());
+		return this.resolveErrorView(request, (resolved != null) ? resolved : HttpStatus.INTERNAL_SERVER_ERROR, model);
+	}
 
 }
