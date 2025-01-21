@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,9 @@ import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfi
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementContextAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.servlet.ServletManagementContextAutoConfiguration;
+import org.springframework.boot.actuate.endpoint.annotation.WriteOperation;
+import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpoint;
+import org.springframework.boot.actuate.endpoint.web.annotation.WebPayload;
 import org.springframework.boot.actuate.endpoint.web.servlet.WebMvcEndpointHandlerMapping;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
@@ -122,7 +125,7 @@ class WebMvcEndpointIntegrationTests {
 			.bodyJson()
 			.extractingPath("_links")
 			.asMap()
-			.containsKeys("beans", "servlet", "restcontroller", "controller");
+			.containsKeys("beans", "servlet", "restcontroller", "controller", "echo");
 	}
 
 	@Test
@@ -141,6 +144,27 @@ class WebMvcEndpointIntegrationTests {
 		TestPropertyValues.of("management.endpoints.web.exposure.include=*").applyTo(this.context);
 		MockMvcTester mvc = doCreateMockMvcTester();
 		assertThat(mvc.get().uri("/actuator/beans")).hasStatusOk().bodyText().contains("\"scope\":\"notelgnis\"");
+	}
+
+	@Test
+	void shouldSupportWebPayloadArguments() {
+		this.context = new AnnotationConfigServletWebApplicationContext();
+		this.context.register(DefaultConfiguration.class, EndpointsConfiguration.class);
+		TestPropertyValues.of("management.endpoints.web.exposure.include=*").applyTo(this.context);
+		MockMvcTester mvc = doCreateMockMvcTester();
+		String content = """
+				{
+				"name": "Spring Boot",
+				"message": "Hello"
+				}
+				""";
+		assertThat(mvc.post().uri("/actuator/echo").contentType(MediaType.APPLICATION_JSON).content(content))
+			.hasStatus(HttpStatus.OK)
+			.bodyJson()
+			.extractingPath("$")
+			.asMap()
+			.containsEntry("name", "Spring Boot")
+			.containsEntry("message", "Hello");
 	}
 
 	private MockMvcTester createSecureMockMvcTester() {
@@ -211,6 +235,16 @@ class WebMvcEndpointIntegrationTests {
 
 	}
 
+	@WebEndpoint(id = "echo")
+	static class TestWebEndpoint {
+
+		@WriteOperation
+		TestPayload echo(TestPayload payload) {
+			return payload;
+		}
+
+	}
+
 	@Configuration(proxyBeanMethods = false)
 	static class EndpointsConfiguration {
 
@@ -228,6 +262,16 @@ class WebMvcEndpointIntegrationTests {
 		TestRestControllerEndpoint testRestControllerEndpoint() {
 			return new TestRestControllerEndpoint();
 		}
+
+		@Bean
+		TestWebEndpoint testWebEndpoint() {
+			return new TestWebEndpoint();
+		}
+
+	}
+
+	@WebPayload
+	record TestPayload(String name, String message) {
 
 	}
 

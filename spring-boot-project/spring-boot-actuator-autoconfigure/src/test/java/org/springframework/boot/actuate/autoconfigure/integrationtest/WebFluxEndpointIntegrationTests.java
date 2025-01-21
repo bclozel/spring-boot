@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@ import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfi
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.reactive.ReactiveManagementContextAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementContextAutoConfiguration;
+import org.springframework.boot.actuate.endpoint.annotation.WriteOperation;
+import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpoint;
+import org.springframework.boot.actuate.endpoint.web.annotation.WebPayload;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.http.codec.CodecsAutoConfiguration;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
@@ -34,6 +37,7 @@ import org.springframework.boot.test.context.runner.ReactiveWebApplicationContex
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +71,8 @@ class WebFluxEndpointIntegrationTests {
 				.jsonPath("_links.restcontroller")
 				.isNotEmpty()
 				.jsonPath("_links.controller")
+				.isNotEmpty()
+				.jsonPath("_links.echo")
 				.isNotEmpty();
 		});
 	}
@@ -98,6 +104,31 @@ class WebFluxEndpointIntegrationTests {
 			});
 	}
 
+	@Test
+	void shouldSupportWebPayloadArguments() {
+		this.contextRunner.withPropertyValues("management.endpoints.web.exposure.include:*").run((context) -> {
+			WebTestClient client = createWebTestClient(context);
+			String content = """
+					{
+					"name": "Spring Boot",
+					"message": "Hello"
+					}
+					""";
+			client.post()
+				.uri("/actuator/echo")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue(content)
+				.exchange()
+				.expectStatus()
+				.isOk()
+				.expectBody()
+				.jsonPath("name")
+				.isEqualTo("Spring Boot")
+				.jsonPath("message")
+				.isEqualTo("Hello");
+		});
+	}
+
 	private WebTestClient createWebTestClient(ApplicationContext context) {
 		return WebTestClient.bindToApplicationContext(context)
 			.configureClient()
@@ -117,6 +148,16 @@ class WebFluxEndpointIntegrationTests {
 
 	}
 
+	@WebEndpoint(id = "echo")
+	static class TestWebEndpoint {
+
+		@WriteOperation
+		TestPayload echo(TestPayload payload) {
+			return payload;
+		}
+
+	}
+
 	@Configuration(proxyBeanMethods = false)
 	static class EndpointsConfiguration {
 
@@ -129,6 +170,16 @@ class WebFluxEndpointIntegrationTests {
 		TestRestControllerEndpoint testRestControllerEndpoint() {
 			return new TestRestControllerEndpoint();
 		}
+
+		@Bean
+		TestWebEndpoint testWebEndpoint() {
+			return new TestWebEndpoint();
+		}
+
+	}
+
+	@WebPayload
+	record TestPayload(String name, String message) {
 
 	}
 

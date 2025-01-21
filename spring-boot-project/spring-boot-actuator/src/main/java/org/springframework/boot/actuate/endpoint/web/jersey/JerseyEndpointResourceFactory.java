@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
 import org.springframework.boot.actuate.endpoint.web.WebOperationRequestPredicate;
 import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.boot.actuate.endpoint.web.annotation.WebPayloadOperationArgumentResolver;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.ClassUtils;
@@ -180,7 +181,8 @@ public class JerseyEndpointResourceFactory {
 					.of(WebServerNamespace.class, () -> this.serverNamespace);
 				InvocationContext invocationContext = new InvocationContext(securityContext, arguments,
 						serverNamespaceArgumentResolver,
-						new ProducibleOperationArgumentResolver(() -> data.getHeaders().get("Accept")));
+						new ProducibleOperationArgumentResolver(() -> data.getHeaders().get("Accept")),
+						new WebPayloadOperationArgumentResolver(arguments));
 				Object response = this.operation.invoke(invocationContext);
 				return convertToJaxRsResponse(response, data.getRequest().getMethod());
 			}

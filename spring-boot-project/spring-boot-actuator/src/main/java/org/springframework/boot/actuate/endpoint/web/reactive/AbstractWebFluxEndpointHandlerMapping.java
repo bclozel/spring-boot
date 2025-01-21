@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
 import org.springframework.boot.actuate.endpoint.web.WebOperationRequestPredicate;
 import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.boot.actuate.endpoint.web.annotation.WebPayloadOperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.web.reactive.AbstractWebFluxEndpointHandlerMapping.AbstractWebFluxEndpointHandlerMappingRuntimeHints;
 import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.annotation.ImportRuntimeHints;
@@ -357,8 +358,8 @@ public abstract class AbstractWebFluxEndpointHandlerMapping extends RequestMappi
 			return this.securityContextSupplier.get()
 				.map((securityContext) -> new InvocationContext(securityContext, arguments,
 						serverNamespaceArgumentResolver,
-						new ProducibleOperationArgumentResolver(
-								() -> exchange.getRequest().getHeaders().get("Accept"))))
+						new ProducibleOperationArgumentResolver(() -> exchange.getRequest().getHeaders().get("Accept")),
+						new WebPayloadOperationArgumentResolver(arguments)))
 				.flatMap((invocationContext) -> handleResult((Publisher<?>) this.invoker.invoke(invocationContext),
 						exchange.getRequest().getMethod()));
 		}

@@ -431,7 +431,9 @@ You can use this to invoke a write operation that takes `String name` and `int c
 include-code::../MyEndpoint[tag=write]
 
 TIP: Because endpoints are technology agnostic, only simple types can be specified in the method signature.
-In particular, declaring a single parameter with a javadoc:liquibase.report.CustomData[] type that defines a `name` and `counter` properties is not supported.
+In particular, declaring a single parameter with a `CustomData` type that defines a `name` and `counter` properties is not supported.
+This feature is supported for web endpoints with javadoc:org.springframework.boot.actuate.endpoint.web.annotation.WebPayload[format=annotation],
+see the xref:actuator/endpoints.adoc#actuator.endpoints.implementing-custom.web.payload[complex types] section for more details.
 
 NOTE: To let the input be mapped to the operation method's parameters, Java code that implements an endpoint should be compiled with `-parameters`.
 For Kotlin code, please review {url-spring-framework-docs}/languages/kotlin/classes-interfaces.html[the recommendation] of the Spring Framework reference.
@@ -474,6 +476,22 @@ Such a parameter is added to the path predicate as a path variable.
 The variable's value is passed into the operation method when the endpoint operation is invoked.
 If you want to capture all remaining path elements, you can add `@Selector(Match=ALL_REMAINING)` to the last parameter and make it a type that is conversion-compatible with a `String[]`.
 
+[[actuator.endpoints.implementing-custom.web.payload]]
+==== `@WebPayload` complex types as endpoint parameters
+
+Web endpoints can accept complex types as method parameters. For that, custom types themselves must be annotated with
+javadoc:org.springframework.boot.actuate.endpoint.web.annotation.WebPayload[format=annotation]:
+
+include-code::../CustomPayload[]
+
+Our `CustomPayload` can then be declared as a method parameter without any additional setup:
+
+include-code::../MyWebEndpoint[tag=write]
+
+NOTE: `@WebPayload` annotated types are not deserialized from the JSON request body directly,
+so adding Jackson annotations on them will have no effect. Instead, data is first collected
+from the request body or form parameters, and then bound to this custom type with
+Spring Framework's javadoc:org.springframework.validation.DataBinder[].
 
 
 [[actuator.endpoints.implementing-custom.web.method-predicates]]
