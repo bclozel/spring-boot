@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2024 the original author or authors.
+ * Copyright 2012-2025 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.test.simple.SimpleTracer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -27,6 +29,7 @@ import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfigu
 import org.springframework.boot.actuate.autoconfigure.metrics.test.MetricsRun;
 import org.springframework.boot.actuate.autoconfigure.metrics.web.TestController;
 import org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration;
+import org.springframework.boot.actuate.web.tracing.reactive.TraceResponseObservationWebFilter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.web.reactive.WebFluxAutoConfiguration;
 import org.springframework.boot.test.context.assertj.AssertableReactiveWebApplicationContext;
@@ -115,6 +118,25 @@ class WebFluxObservationAutoConfigurationTests {
 				assertThat(context).hasBean("customServerRequestObservationConvention");
 				assertThat(context).hasSingleBean(ServerRequestObservationConvention.class);
 			});
+	}
+
+	@Test
+	void shouldNotConfigureTraceResponseObservationWebFilterByDefault() {
+		this.contextRunner
+			.run((context) -> assertThat(context).doesNotHaveBean(TraceResponseObservationWebFilter.class));
+	}
+
+	@Test
+	void shouldNotConfigureTraceResponseObservationWebFilterIfTracerMissing() {
+		this.contextRunner.withPropertyValues("management.observations.http.server.requests.write-traceresponse=true")
+			.run((context) -> assertThat(context).doesNotHaveBean(TraceResponseObservationWebFilter.class));
+	}
+
+	@Test
+	void shouldConfigureTraceResponseObservationWebFilter() {
+		this.contextRunner.withPropertyValues("management.observations.http.server.requests.write-traceresponse=true")
+			.withBean(Tracer.class, SimpleTracer::new)
+			.run((context) -> assertThat(context).hasSingleBean(TraceResponseObservationWebFilter.class));
 	}
 
 	private MeterRegistry getInitializedMeterRegistry(AssertableReactiveWebApplicationContext context) {

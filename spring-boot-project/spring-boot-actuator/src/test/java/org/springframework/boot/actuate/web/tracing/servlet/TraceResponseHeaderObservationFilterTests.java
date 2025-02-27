@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package org.springframework.boot.actuate.autoconfigure.observation.web.servlet;
+package org.springframework.boot.actuate.web.tracing.servlet;
 
 import io.micrometer.observation.tck.TestObservationRegistry;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.handler.DefaultTracingObservationHandler;
+import io.micrometer.tracing.test.simple.SimpleSpan;
 import io.micrometer.tracing.test.simple.SimpleTracer;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
@@ -29,33 +30,44 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for {@link TraceHeaderObservationFilter}.
+ * Tests for {@link TraceResponseHeaderObservationFilter}.
  *
  * @author Brian Clozel
  */
-class TraceHeaderObservationFilterTests {
+class TraceResponseHeaderObservationFilterTests {
 
 	TestObservationRegistry observationRegistry = TestObservationRegistry.create();
 
 	@Test
 	void shouldWriteTraceHeaderWhenCurrentTrace() throws Exception {
-		TraceHeaderObservationFilter filter = createFilter(new SimpleTracer());
+		TraceResponseHeaderObservationFilter filter = createFilter(new SimpleTracer());
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		filter.doFilter(new MockHttpServletRequest(), response, getFilterChain());
-		assertThat(response.getHeader("X-Trace-Id")).isNotEmpty();
+		assertThat(response.getHeader("traceresponse")).matches("00-[0-9a-f]+-[0-9a-f]+-000000[01]{2}");
+	}
+
+	@Test
+	void shouldWriteTraceHeaderSampledFlagWhenParentSpan() throws Exception {
+		SimpleTracer simpleTracer = new SimpleTracer();
+		// create a parent span
+		SimpleSpan parentSpan = simpleTracer.nextSpan();
+		TraceResponseHeaderObservationFilter filter = createFilter(simpleTracer);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		filter.doFilter(new MockHttpServletRequest(), response, getFilterChain());
+		assertThat(response.getHeader("traceresponse")).matches("00-[0-9a-f]+-[0-9a-f]+-00000010");
 	}
 
 	@Test
 	void shouldNotWriteTraceHeaderWhenNoCurrentTrace() throws Exception {
-		TraceHeaderObservationFilter filter = createFilter(Tracer.NOOP);
+		TraceResponseHeaderObservationFilter filter = createFilter(Tracer.NOOP);
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		filter.doFilter(new MockHttpServletRequest(), response, getFilterChain());
-		assertThat(response.getHeaderNames()).doesNotContain("X-Trace-Id");
+		assertThat(response.getHeaderNames()).doesNotContain("traceresponse");
 	}
 
-	private TraceHeaderObservationFilter createFilter(Tracer tracer) {
+	private TraceResponseHeaderObservationFilter createFilter(Tracer tracer) {
 		this.observationRegistry.observationConfig().observationHandler(new DefaultTracingObservationHandler(tracer));
-		return new TraceHeaderObservationFilter(tracer, this.observationRegistry);
+		return new TraceResponseHeaderObservationFilter(this.observationRegistry);
 	}
 
 	private static FilterChain getFilterChain() {

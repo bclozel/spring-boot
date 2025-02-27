@@ -128,9 +128,9 @@ public class ObservationProperties {
 				private String name = "http.server.requests";
 
 				/**
-				 * Whether to write the "X-Trace-Id" HTTP response header.
+				 * Whether to write the "traceresponse" HTTP response header.
 				 */
-				private boolean writeTraceHeader = false;
+				private boolean writeTraceresponse = false;
 
 				public String getName() {
 					return this.name;
@@ -140,12 +140,12 @@ public class ObservationProperties {
 					this.name = name;
 				}
 
-				public boolean isWriteTraceHeader() {
-					return this.writeTraceHeader;
+				public boolean isWriteTraceresponse() {
+					return this.writeTraceresponse;
 				}
 
-				public void setWriteTraceHeader(boolean writeTraceHeader) {
-					this.writeTraceHeader = writeTraceHeader;
+				public void setWriteTraceresponse(boolean writeTraceresponse) {
+					this.writeTraceresponse = writeTraceresponse;
 				}
 
 			}

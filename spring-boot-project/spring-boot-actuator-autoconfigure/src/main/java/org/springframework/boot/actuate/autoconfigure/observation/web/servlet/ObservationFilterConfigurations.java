@@ -22,6 +22,7 @@ import jakarta.servlet.DispatcherType;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.autoconfigure.observation.ObservationProperties;
+import org.springframework.boot.actuate.web.tracing.servlet.TraceResponseHeaderObservationFilter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -54,16 +55,18 @@ abstract class ObservationFilterConfigurations {
 	static class TracingHeaderObservation {
 
 		@Bean
-		@ConditionalOnBooleanProperty("management.observations.http.server.requests.write-trace-header")
+		@ConditionalOnBooleanProperty("management.observations.http.server.requests.write-traceresponse")
 		@ConditionalOnBean(Tracer.class)
-		@ConditionalOnMissingFilterBean({ ServerHttpObservationFilter.class, TraceHeaderObservationFilter.class })
-		FilterRegistrationBean<TraceHeaderObservationFilter> webMvcObservationFilter(ObservationRegistry registry,
-				Tracer tracer, ObjectProvider<ServerRequestObservationConvention> customConvention,
+		@ConditionalOnMissingFilterBean({ ServerHttpObservationFilter.class,
+				TraceResponseHeaderObservationFilter.class })
+		FilterRegistrationBean<TraceResponseHeaderObservationFilter> webMvcObservationFilter(
+				ObservationRegistry registry, ObjectProvider<ServerRequestObservationConvention> customConvention,
 				ObservationProperties observationProperties) {
 			String name = observationProperties.getHttp().getServer().getRequests().getName();
 			ServerRequestObservationConvention convention = customConvention
 				.getIfAvailable(() -> new DefaultServerRequestObservationConvention(name));
-			TraceHeaderObservationFilter filter = new TraceHeaderObservationFilter(tracer, registry, convention);
+			TraceResponseHeaderObservationFilter filter = new TraceResponseHeaderObservationFilter(registry,
+					convention);
 			return filterRegistration(filter);
 		}
 
@@ -73,7 +76,8 @@ abstract class ObservationFilterConfigurations {
 	static class DefaultObservation {
 
 		@Bean
-		@ConditionalOnMissingFilterBean({ ServerHttpObservationFilter.class, TraceHeaderObservationFilter.class })
+		@ConditionalOnMissingFilterBean({ ServerHttpObservationFilter.class,
+				TraceResponseHeaderObservationFilter.class })
 		FilterRegistrationBean<ServerHttpObservationFilter> webMvcObservationFilter(ObservationRegistry registry,
 				ObjectProvider<ServerRequestObservationConvention> customConvention,
 				ObservationProperties observationProperties) {

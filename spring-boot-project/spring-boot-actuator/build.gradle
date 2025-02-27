@@ -97,6 +97,7 @@ dependencies {
 	testImplementation("org.assertj:assertj-core")
 	testImplementation("com.jayway.jsonpath:json-path")
 	testImplementation("io.micrometer:micrometer-observation-test")
+	testImplementation("io.micrometer:micrometer-tracing-test")
 	testImplementation("io.projectreactor:reactor-test")
 	testImplementation("io.r2dbc:r2dbc-h2")
 	testImplementation("net.minidev:json-smart")
