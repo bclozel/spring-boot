@@ -16,8 +16,6 @@
 
 package org.springframework.boot.webmvc.autoconfigure.error;
 
-import java.util.Collections;
-import java.util.EnumMap;
 import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,7 +29,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatus.Series;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.util.Assert;
 import org.springframework.util.FileCopyUtils;
@@ -57,15 +55,6 @@ import org.springframework.web.servlet.View;
  * @since 4.0.0
  */
 public class DefaultErrorViewResolver implements ErrorViewResolver, Ordered {
-
-	private static final Map<Series, String> SERIES_VIEWS;
-
-	static {
-		Map<Series, String> views = new EnumMap<>(Series.class);
-		views.put(Series.CLIENT_ERROR, "4xx");
-		views.put(Series.SERVER_ERROR, "5xx");
-		SERIES_VIEWS = Collections.unmodifiableMap(views);
-	}
 
 	private final ApplicationContext applicationContext;
 
@@ -98,11 +87,14 @@ public class DefaultErrorViewResolver implements ErrorViewResolver, Ordered {
 	}
 
 	@Override
-	public @Nullable ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status,
+	public @Nullable ModelAndView resolveErrorView(HttpServletRequest request, HttpStatusCode status,
 			Map<String, Object> model) {
 		ModelAndView modelAndView = resolve(String.valueOf(status.value()), model);
-		if (modelAndView == null && SERIES_VIEWS.containsKey(status.series())) {
-			modelAndView = resolve(SERIES_VIEWS.get(status.series()), model);
+		if (modelAndView == null && status.is4xxClientError()) {
+			modelAndView = resolve("4xx", model);
+		}
+		else if (modelAndView == null && status.is5xxServerError()) {
+			modelAndView = resolve("5xx", model);
 		}
 		return modelAndView;
 	}

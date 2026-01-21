@@ -36,15 +36,11 @@ import java.util.function.Consumer;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ValidatorFactory;
-import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.annotation.AfterReturning;
-import org.aspectj.lang.annotation.Aspect;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
-import org.springframework.aop.support.AopUtils;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -68,14 +64,10 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration.MvcValidatorRuntimeHints;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration.WebMvcAutoConfigurationAdapter;
-import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfigurationTests.OrderedControllerAdviceBeansConfiguration.HighestOrderedControllerAdvice;
-import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfigurationTests.OrderedControllerAdviceBeansConfiguration.LowestOrderedControllerAdvice;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.io.ClassPathResource;
@@ -106,7 +98,6 @@ import org.springframework.web.accept.InvalidApiVersionException;
 import org.springframework.web.accept.MissingApiVersionException;
 import org.springframework.web.accept.ParameterContentNegotiationStrategy;
 import org.springframework.web.accept.StandardApiVersionDeprecationHandler;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.support.ConfigurableWebBindingInitializer;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
@@ -114,7 +105,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.FormContentFilter;
 import org.springframework.web.filter.HiddenHttpMethodFilter;
 import org.springframework.web.filter.RequestContextFilter;
-import org.springframework.web.method.ControllerAdviceBean;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.FlashMap;
 import org.springframework.web.servlet.FlashMapManager;
@@ -138,7 +128,6 @@ import org.springframework.web.servlet.i18n.FixedLocaleResolver;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver;
 import org.springframework.web.servlet.resource.CachingResourceResolver;
 import org.springframework.web.servlet.resource.CachingResourceTransformer;
@@ -999,45 +988,6 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
-	void problemDetailsDisabledByDefault() {
-		this.contextRunner.run((context) -> assertThat(context).doesNotHaveBean(ProblemDetailsExceptionHandler.class));
-	}
-
-	@Test
-	void problemDetailsEnabledAddsExceptionHandler() {
-		this.contextRunner.withPropertyValues("spring.mvc.problemdetails.enabled:true")
-			.run((context) -> assertThat(context).hasSingleBean(ProblemDetailsExceptionHandler.class));
-	}
-
-	@Test
-	void problemDetailsExceptionHandlerDoesNotPreventProxying() {
-		this.contextRunner.withUserConfiguration(AopConfiguration.class)
-			.withBean(ExceptionHandlerInterceptor.class)
-			.withPropertyValues("spring.mvc.problemdetails.enabled:true")
-			.run((context) -> assertThat(context).getBean(ProblemDetailsExceptionHandler.class)
-				.matches(AopUtils::isCglibProxy));
-	}
-
-	@Test
-	void problemDetailsBacksOffWhenExceptionHandler() {
-		this.contextRunner.withPropertyValues("spring.mvc.problemdetails.enabled:true")
-			.withUserConfiguration(CustomExceptionHandlerConfiguration.class)
-			.run((context) -> assertThat(context).doesNotHaveBean(ProblemDetailsExceptionHandler.class)
-				.hasSingleBean(CustomExceptionHandler.class));
-	}
-
-	@Test
-	void problemDetailsExceptionHandlerIsOrderedAt0() {
-		this.contextRunner.withPropertyValues("spring.mvc.problemdetails.enabled:true")
-			.withUserConfiguration(OrderedControllerAdviceBeansConfiguration.class)
-			.run((context) -> assertThat(
-					ControllerAdviceBean.findAnnotatedBeans(context).stream().map(ControllerAdviceBean::getBeanType))
-				.asInstanceOf(InstanceOfAssertFactories.list(Class.class))
-				.containsExactly(HighestOrderedControllerAdvice.class, ProblemDetailsExceptionHandler.class,
-						OrderedControllerAdviceBeansConfiguration.LowestOrderedControllerAdvice.class));
-	}
-
-	@Test
 	void apiVersionPropertiesAreApplied() {
 		this.contextRunner
 			.withPropertyValues("spring.mvc.apiversion.use.header=version", "spring.mvc.apiversion.required=true",
@@ -1660,55 +1610,6 @@ class WebMvcAutoConfigurationTests {
 				}
 
 			};
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	static class CustomExceptionHandlerConfiguration {
-
-		@Bean
-		CustomExceptionHandler customExceptionHandler() {
-			return new CustomExceptionHandler();
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@Import({ LowestOrderedControllerAdvice.class, HighestOrderedControllerAdvice.class })
-	static class OrderedControllerAdviceBeansConfiguration {
-
-		@ControllerAdvice
-		@Order
-		static class LowestOrderedControllerAdvice {
-
-		}
-
-		@ControllerAdvice
-		@Order(Ordered.HIGHEST_PRECEDENCE)
-		static class HighestOrderedControllerAdvice {
-
-		}
-
-	}
-
-	@ControllerAdvice
-	static class CustomExceptionHandler extends ResponseEntityExceptionHandler {
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@EnableAspectJAutoProxy(proxyTargetClass = true)
-	static class AopConfiguration {
-
-	}
-
-	@Aspect
-	static class ExceptionHandlerInterceptor {
-
-		@AfterReturning(pointcut = "@annotation(org.springframework.web.bind.annotation.ExceptionHandler)",
-				returning = "returnValue")
-		void exceptionHandlerIntercept(JoinPoint joinPoint, Object returnValue) {
 		}
 
 	}
