@@ -22,12 +22,13 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.servlet.ModelAndView;
 
 public class MyErrorViewResolver implements ErrorViewResolver {
 
 	@Override
-	public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status, Map<String, Object> model) {
+	public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatusCode status, Map<String, Object> model) {
 		// Use the request or status to optionally return a ModelAndView
 		if (status == HttpStatus.INSUFFICIENT_STORAGE) {
 			// We could add custom model values here

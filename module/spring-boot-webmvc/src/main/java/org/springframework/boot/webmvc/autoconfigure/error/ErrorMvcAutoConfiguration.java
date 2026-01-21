@@ -63,12 +63,14 @@ import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.http.MediaType;
 import org.springframework.lang.Contract;
 import org.springframework.util.Assert;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.View;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.view.BeanNameViewResolver;
 import org.springframework.web.util.HtmlUtils;
 
@@ -96,28 +98,61 @@ public final class ErrorMvcAutoConfiguration {
 		this.webProperties = webProperties;
 	}
 
-	@Bean
-	@ConditionalOnMissingBean(value = ErrorAttributes.class, search = SearchStrategy.CURRENT)
-	DefaultErrorAttributes errorAttributes() {
-		return new DefaultErrorAttributes();
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnBooleanProperty("spring.mvc.problemdetails.enabled")
+	static class ProblemDetailsConfiguration {
+
+		private final WebProperties webProperties;
+
+		ProblemDetailsConfiguration(WebProperties webProperties) {
+			this.webProperties = webProperties;
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(value = ResponseEntityExceptionHandler.class, search = SearchStrategy.CURRENT)
+		@Order(0)
+		DefaultExceptionHandler problemDetailsExceptionHandler(ObjectProvider<ErrorViewResolver> errorViewResolvers) {
+			return new DefaultExceptionHandler(this.webProperties.getError(),
+					errorViewResolvers.orderedStream().toList());
+		}
+
 	}
 
-	@Bean
-	@ConditionalOnMissingBean(value = ErrorController.class, search = SearchStrategy.CURRENT)
-	BasicErrorController basicErrorController(ErrorAttributes errorAttributes,
-			ObjectProvider<ErrorViewResolver> errorViewResolvers) {
-		return new BasicErrorController(errorAttributes, this.webProperties.getError(),
-				errorViewResolvers.orderedStream().toList());
-	}
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnBooleanProperty(name = "spring.mvc.problemdetails.enabled", havingValue = false,
+			matchIfMissing = true)
+	static class ErrorControllerConfiguration {
 
-	@Bean
-	ErrorPageCustomizer errorPageCustomizer(DispatcherServletPath dispatcherServletPath) {
-		return new ErrorPageCustomizer(this.webProperties, dispatcherServletPath);
-	}
+		private final WebProperties webProperties;
 
-	@Bean
-	static PreserveErrorControllerTargetClassPostProcessor preserveErrorControllerTargetClassPostProcessor() {
-		return new PreserveErrorControllerTargetClassPostProcessor();
+		ErrorControllerConfiguration(WebProperties webProperties) {
+			this.webProperties = webProperties;
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(value = ErrorAttributes.class, search = SearchStrategy.CURRENT)
+		DefaultErrorAttributes errorAttributes() {
+			return new DefaultErrorAttributes();
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(value = ErrorController.class, search = SearchStrategy.CURRENT)
+		BasicErrorController basicErrorController(ErrorAttributes errorAttributes,
+				ObjectProvider<ErrorViewResolver> errorViewResolvers) {
+			return new BasicErrorController(errorAttributes, this.webProperties.getError(),
+					errorViewResolvers.orderedStream().toList());
+		}
+
+		@Bean
+		ErrorPageCustomizer errorPageCustomizer(DispatcherServletPath dispatcherServletPath) {
+			return new ErrorPageCustomizer(this.webProperties, dispatcherServletPath);
+		}
+
+		@Bean
+		static PreserveErrorControllerTargetClassPostProcessor preserveErrorControllerTargetClassPostProcessor() {
+			return new PreserveErrorControllerTargetClassPostProcessor();
+		}
+
 	}
 
 	@Configuration(proxyBeanMethods = false)

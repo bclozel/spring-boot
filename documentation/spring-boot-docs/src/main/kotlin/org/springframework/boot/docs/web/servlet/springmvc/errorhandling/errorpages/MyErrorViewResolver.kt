@@ -19,11 +19,12 @@ package org.springframework.boot.docs.web.servlet.springmvc.errorhandling.errorp
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver
 import org.springframework.http.HttpStatus
+import org.springframework.http.HttpStatusCode
 import org.springframework.web.servlet.ModelAndView
 
 class MyErrorViewResolver : ErrorViewResolver {
 
-	override fun resolveErrorView(request: HttpServletRequest, status: HttpStatus,
+	override fun resolveErrorView(request: HttpServletRequest, status: HttpStatusCode,
 			model: Map<String, Any>): ModelAndView? {
 		// Use the request or status to optionally return a ModelAndView
 		if (status == HttpStatus.INSUFFICIENT_STORAGE) {

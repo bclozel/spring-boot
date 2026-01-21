@@ -133,7 +133,6 @@ import org.springframework.web.servlet.i18n.FixedLocaleResolver;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.EncodedResourceResolver;
 import org.springframework.web.servlet.resource.ResourceResolver;
 import org.springframework.web.servlet.resource.ResourceUrlProvider;
@@ -733,19 +732,6 @@ public final class WebMvcAutoConfiguration {
 				resolver.addContentVersionStrategy(paths);
 			}
 			return resolver;
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@ConditionalOnBooleanProperty("spring.mvc.problemdetails.enabled")
-	static class ProblemDetailsErrorHandlingConfiguration {
-
-		@Bean
-		@ConditionalOnMissingBean(ResponseEntityExceptionHandler.class)
-		@Order(0)
-		ProblemDetailsExceptionHandler problemDetailsExceptionHandler() {
-			return new ProblemDetailsExceptionHandler();
 		}
 
 	}
